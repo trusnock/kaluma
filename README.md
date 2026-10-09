@@ -1,3 +1,22 @@
+> ## 🍴 This is a personal fork — **not the original project, not authoritative**
+>
+> You're looking at **`trusnock/kaluma`**, a **personal fork** of
+> [**Kaluma**](https://github.com/kaluma-project/kaluma) (the official site is
+> [kalumajs.org](https://kalumajs.org/)). It is **not** the upstream project and
+> **not** trying to become its new home.
+>
+> - **No credit taken for the code.** All original code is by Changjae (Jay) Kim
+>   and the Kaluma contributors, licensed **Apache-2.0** (notices preserved).
+> - **Why this fork exists:** the upstream project has been dormant for a while,
+>   and a few **known, reported bugs** were blocking real use. I used AI-assisted
+>   work to **fix a small set of those reported bugs** so this build works again.
+> - **What was fixed:** #688, #689, #690, #691, #686 — see
+>   **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the full breakdown, how to
+>   build/run, and how to file issues or open PRs.
+>
+> **This is a "my little corner of the world where I fixed a few known issues so
+> people could get back to using it" build — not a competing fork.**
+
 ![logo](https://github.com/kaluma-project/kaluma/blob/master/logo.png?raw=true)
 
 [![Current Version](https://img.shields.io/github/tag/kaluma-project/kaluma.svg)](https://github.com/kaluma-project/kaluma/tags)
