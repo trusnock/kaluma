@@ -102,6 +102,36 @@ static void km_pio_init() {
 }
 
 /**
+ * Reset PIO state machines and instruction memory so a re-run of user code
+ * (via .load, .reset, or the natural end of a boot-time program) starts from a
+ * clean slate.
+ *
+ * pico-sdk tracks per-PIO used instruction memory in a C static
+ * (`_used_instruction_space`) that is only reset by `pio_clear_instruction_memory`.
+ * Kaluma used to call that on first boot (km_pio_init) and never again, so the
+ * second .load of the same PIO program started its offset below the first
+ * (28 -> 24 -> 20 -> ... -> -9), state machines left running by the previous
+ * program kept driving pins, and only a full flash_nuke recovered the part
+ * (issues #690 and #691).
+ *
+ * Call this from km_system_cleanup() on every program end / .load / .reset.
+ * Order matters: stop SMs first so they don't race with instruction-memory
+ * clear, then unclaim, then clear the memory.
+ */
+static void km_pio_cleanup() {
+  for (int i = 0; i < KALUMA_PIO_SM_NUM; i++) {
+    // Stop SMs unconditionally (idempotent - safe even for unclaimed/disabled
+    // SMs; this is what the SDK's own pio_sm_set_enabled expects).
+    pio_sm_set_enabled(pio0, i, false);
+    pio_sm_set_enabled(pio1, i, false);
+    if (pio_sm_is_claimed(pio0, i)) pio_sm_unclaim(pio0, i);
+    if (pio_sm_is_claimed(pio1, i)) pio_sm_unclaim(pio1, i);
+  }
+  pio_clear_instruction_memory(pio0);
+  pio_clear_instruction_memory(pio1);
+}
+
+/**
  * Kaluma Hardware System Initializations
  */
 void km_system_init() {
@@ -122,6 +152,7 @@ void km_system_cleanup() {
 #ifdef PICO_CYW43
   km_cyw43_deinit();
 #endif
+  km_pio_cleanup();
   km_adc_cleanup();
   km_pwm_cleanup();
   km_i2c_cleanup();

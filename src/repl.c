@@ -941,7 +941,21 @@ void km_repl_print_prompt() {
 }
 
 void km_repl_register_command(char *name, char *desc, km_repl_command_cb cb) {
-  km_repl_command_t *cmd = malloc(sizeof(km_repl_command_t));
+  // Idempotent: if a command with this name already exists, update it in place
+  // instead of appending a duplicate. Modules (e.g. fs: .ls/.pwd/.cd/.mkdir/
+  // .rm/.cat) re-register on every km_runtime_init() (.load/.flash/.reset);
+  // .load and .flash do not clear the list first (only .reset does), so a plain
+  // append accumulated duplicates - the "redundant lines" in issue #686.
+  km_repl_command_t *cmd = (km_repl_command_t *)state.commands.head;
+  while (cmd != NULL) {
+    if (strcmp(cmd->name, name) == 0) {
+      strcpy(cmd->desc, desc);
+      cmd->cb = cb;
+      return;
+    }
+    cmd = (km_repl_command_t *)((km_list_node_t *)cmd)->next;
+  }
+  cmd = malloc(sizeof(km_repl_command_t));
   strcpy(cmd->name, name);
   strcpy(cmd->desc, desc);
   cmd->cb = cb;
