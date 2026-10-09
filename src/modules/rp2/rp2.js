@@ -28,6 +28,30 @@ class ASM {
     this.sideset = options.sideset;
     this.sidesetOpt = options.sidesetOpt;
     this.sidesetPindirs = options.sidesetPindirs;
+    if (options.sidesetPindirs && options.sideset <= 0) {
+      throw new RangeError(
+        "sidesetPindirs requires sideset >= 1"
+      );
+    }
+    if (options.sidesetOpt && options.sideset <= 0) {
+      throw new RangeError(
+        "sidesetOpt requires sideset >= 1"
+      );
+    }
+  }
+
+  // Maximum PIO program size is 32 instructions (5-bit instruction offset).
+  static MAX_PROGRAM_SIZE = 32;
+
+  // Append one 16-bit instruction, enforcing the 32-instruction limit (issue #689).
+  // Check before pushing so `this.code` never exceeds the limit even if the
+  // caller catches the thrown error.
+  _add(c) {
+    if (this.code.length >= ASM.MAX_PROGRAM_SIZE) {
+      throw new Error("Program too long!");
+    }
+    this.code.push(c);
+    return this;
   }
 
   jmp(cond, target) {
@@ -69,8 +93,7 @@ class ASM {
       offset: this.code.length,
       target: target,
     });
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   wait(pol, src, idx, rel) {
@@ -94,8 +117,7 @@ class ASM {
         throw new Error("Unknown source of wait()");
     }
     c |= idx;
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   in(src, bits) {
@@ -128,8 +150,7 @@ class ASM {
       bits = 0;
     }
     c |= bits;
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   out(dst, bits) {
@@ -166,24 +187,21 @@ class ASM {
       bits = 0;
     }
     c |= bits;
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   push(iffull, block = 1) {
     let c = ASM.PUSH;
     if (iffull === 1 || iffull === "iffull") c |= 0x0040;
     if (block === 1 || block === "block") c |= 0x0020;
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   pull(ifempty, block = 1) {
     let c = ASM.PULL;
     if (ifempty === 1 || ifempty === "ifempty") c |= 0x0040;
     if (block === 1 || block === "block") c |= 0x0020;
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   mov(dst, src) {
@@ -250,8 +268,7 @@ class ASM {
       default:
         throw new Error("Unknown source of mov()");
     }
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   irq(cmd, irqnum, rel) {
@@ -283,8 +300,7 @@ class ASM {
     if (rel === "rel") {
       c |= 1 << 4;
     }
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   set(dst, val) {
@@ -310,8 +326,7 @@ class ASM {
         throw new Error("Unknown destination of set()");
     }
     c |= val;
-    this.code.push(c);
-    return this;
+    return this._add(c);
   }
 
   nop() {
@@ -347,6 +362,19 @@ class ASM {
   }
 
   delay(val) {
+    // The delay field is 5 bits (bits 8-12). Values above 31 (or with the high
+    // bits set when sideset occupies the same field) silently corrupt the
+    // instruction and/or sideset bits, so reject them (issue #688).
+    if (
+      typeof val !== "number" ||
+      !Number.isInteger(val) ||
+      val < 0 ||
+      val > 0x1f
+    ) {
+      throw new RangeError(
+        `delay value must be an integer in the range 0-31 (got ${val})`
+      );
+    }
     const i = this.code.length - 1;
     let c = this.code[i];
     c |= val << 8;
