@@ -164,3 +164,48 @@ hr.sep { border: 0; border-top: 1px solid var(--border); margin: 34px 0; }
 .fade { opacity: 0; transform: translateY(8px); animation: fade .6s ease forwards; }
 @keyframes fade { to { opacity: 1; transform: none; } }
 .d1{animation-delay:.05s}.d2{animation-delay:.12s}.d3{animation-delay:.19s}.d4{animation-delay:.26s}.d5{animation-delay:.33s}
+
+/* ============ animation / "it's actually running" styles ============ */
+.runrow { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.runrow .hint { color: var(--muted2); }
+.runbtn.loading::before { content:""; width:13px; height:13px; border:2px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; display:inline-block; margin-right:8px; vertical-align:-2px; animation:spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* big pin LED (showcase) */
+.led { display:inline-flex; align-items:center; gap:11px; padding:9px 15px; border:1px solid var(--border-strong); border-radius:999px; background:rgba(0,0,0,.32); }
+.led-dot { width:16px; height:16px; border-radius:50%; background:#1c2338; box-shadow:inset 0 0 6px rgba(0,0,0,.7); transition:all .18s ease; }
+.led-text { font-family:var(--mono); font-size:13px; color:var(--muted); }
+.led.lit .led-dot { background:var(--amber); box-shadow:0 0 16px 4px rgba(251,191,36,.75); }
+.led.lit .led-text { color:var(--amber); }
+.led.blink .led-dot { animation:ledblink .5s steps(1,end) infinite; }
+@keyframes ledblink { 0%,49%{ background:var(--amber); box-shadow:0 0 16px 4px rgba(251,191,36,.75);} 50%,100%{ background:#1c2338; box-shadow:inset 0 0 6px rgba(0,0,0,.7);} }
+
+/* mini LEDs (per-card) */
+.mled { display:inline-block; width:12px; height:12px; border-radius:50%; background:#1c2338; box-shadow:inset 0 0 5px rgba(0,0,0,.7); margin-right:8px; vertical-align:-1px; transition:all .18s ease; }
+.mled.on { background:var(--amber); box-shadow:0 0 12px 3px rgba(251,191,36,.7); }
+.mled.blink { animation:mledblink .5s steps(1,end) infinite; }
+@keyframes mledblink { 0%,49%{ background:var(--amber); box-shadow:0 0 12px 3px rgba(251,191,36,.7);} 50%,100%{ background:#1c2338; box-shadow:inset 0 0 5px rgba(0,0,0,.7);} }
+.col .headrow { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.col .headrow .tag { margin-bottom:0; }
+
+/* progress bar (#689) */
+.bar { height:12px; border-radius:7px; background:rgba(255,255,255,.06); border:1px solid var(--border); overflow:hidden; margin:6px 0 2px; }
+.bar-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--green),var(--teal)); transition:width .18s ease; }
+.bar-fill.over { background:linear-gradient(90deg,var(--amber),var(--red)); }
+.bar-scale { display:flex; justify-content:space-between; font-family:var(--mono); font-size:10.5px; color:var(--muted2); margin-top:3px; }
+
+/* bit bar (#688) */
+.bits { display:flex; gap:2px; margin:8px 0 4px; }
+.bit { flex:1; height:26px; border-radius:4px; border:1px solid var(--border); background:rgba(255,255,255,.03); display:grid; place-items:center; font-family:var(--mono); font-size:9px; color:var(--muted2); transition:all .15s ease; }
+.bit.op { color:var(--blue); }
+.bit.delay { color:var(--amber); }
+.bit.set { background:rgba(167,139,250,.5); border-color:var(--violet); color:#efe9ff; }
+.bit.spill { background:rgba(251,113,133,.55); border-color:var(--red); color:#fff; }
+
+/* shake + flash */
+.shake { animation:shake .4s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-5px)} 40%{transform:translateX(5px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+.flash { animation:flashin .5s ease; }
+@keyframes flashin { 0%{background:rgba(251,113,133,.35)} 100%{background:transparent} }
+.col .res.pulse { animation:flashin .5s ease; }
+

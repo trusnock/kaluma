@@ -1,126 +1,126 @@
-/* Kaluma PIO Workbench — app.js
+/* Kaluma PIO Workbench — app.js  (v2: animated "it's actually running")
  *
- * Loads the REAL repo code (src/modules/rp2/rp2.js and tests/rp2.asm.test.js)
- * into the browser via a small CommonJS shim, so the fixes are exercised with
- * the actual source. The native `rp2` binding (PIO memory + state machines) is
- * emulated by a faithful model of the pico-sdk behavior those fixes target:
- *   - top-down PIO instruction-memory allocator (find_offset_for_program)
- *   - per-PIO `_used_instruction_space` static (only reset by
- *     pio_clear_instruction_memory)
- *   - SM enable/claim/stop
+ * Runs the REAL repo code (src/modules/rp2/rp2.js + tests/rp2.asm.test.js) in
+ * the browser, and drives a faithful model of the pico-sdk PIO behaviors the
+ * C fixes target. Everything is ANIMATED (step-by-step, cancellable) so the
+ * before/after difference is *watchable*: the offset drifts, the LED blinks,
+ * memory fills/clears, and the SM stops — instead of snapping to an end-state.
+ *
  * This is a MODEL, not silicon, and the UI says so.
  */
 "use strict";
 
 const $ = (s) => document.querySelector(s);
-const $$ = (s) => Array.from(document.querySelectorAll(s));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SPEED = 430; // ms per .load step (slow enough to watch, fast enough to feel snappy)
 
-/* ------------------------------------------------------------------ *
- *  1. Load real repo source (relative to demo/)
- * ------------------------------------------------------------------ */
-const REL = "../"; // demo/ -> repo root
+/* ============ DEV-ONLY: visible error trap (verify console is clean) ============ */
+(function installErrorTrap() {
+  const panel = document.createElement("div");
+  panel.id = "__errtrap";
+  panel.style.cssText =
+    "position:fixed;top:8px;right:8px;z-index:9999;max-width:380px;max-height:45vh;overflow:auto;" +
+    "background:#0b1220;color:#9fe6ff;border:1px solid #2dd4bf;border-left:5px solid #2dd4bf;" +
+    "border-radius:8px;padding:8px 10px;font:11px/1.5 ui-monospace,Menlo,monospace;box-shadow:0 6px 24px rgba(0,0,0,.5);";
+  function line(txt, bad) {
+    const d = document.createElement("div");
+    d.textContent = txt;
+    d.style.color = bad ? "#ff9aa2" : "#9fe6ff";
+    d.style.borderBottom = "1px dashed rgba(255,255,255,.08)";
+    d.style.padding = "2px 0";
+    panel.appendChild(d);
+    panel.style.display = "block";
+    panel.scrollTop = panel.scrollHeight;
+  }
+  panel.appendChild(Object.assign(document.createElement("div"),
+    { textContent: "⚠ runtime error trap (dev) — empty = clean", style: { color: "#5eead4", fontWeight: "700", marginBottom: "4px" } }));
+  const errs = [];
+  window.addEventListener("error", (e) => {
+    errs.push("error: " + (e.message || e.type) + (e.filename ? " @ " + e.filename + ":" + e.lineno : ""));
+    line(errs[errs.length - 1], true);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const m = e.reason && (e.reason.message || String(e.reason));
+    errs.push("rejection: " + m);
+    line(errs[errs.length - 1], true);
+  });
+  self.__ERRTRAP__ = { errs, panel };
+  return panel;
+})();
+/* ============ end dev error trap ============ */
+
+/* ============ 1. load real repo source (with fallback bundle) ============ */
+const REL = "../";
 async function loadText(p) {
   const r = await fetch(REL + p, { cache: "no-store" });
   if (!r.ok) throw new Error("failed to load " + p + " (" + r.status + ")");
   return r.text();
 }
-
-let rp2Src = null, testSrc = null, usedFallback = false;
+let rp2Src = null, testSrc = null;
 try {
   [rp2Src, testSrc] = await Promise.all([
     loadText("src/modules/rp2/rp2.js"),
     loadText("tests/rp2.asm.test.js"),
   ]);
 } catch (e) {
-  // Fallback to the auto-generated bundle (base64 of the same two real files)
-  // so the demo works from any serving root or opened as a local file.
   const B = self.__KALUMA_DEMO_BUNDLE__;
-  if (B) {
-    const fromB64 = (s) => atob(s);
-    rp2Src = fromB64(B.rp2);
-    testSrc = fromB64(B.test);
-    usedFallback = true;
-  } else {
+  if (B) { rp2Src = atob(B.rp2); testSrc = atob(B.test); }
+  else {
     document.body.insertAdjacentHTML("beforeend",
       `<div style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#3b0d18;color:#ffd9de;border:1px solid #fb7185;padding:10px 16px;border-radius:12px;font-family:var(--mono);font-size:13px;z-index:99">
-        Could not load repo source for the live section: ${e.message}. The static explanation still renders.
-      </div>`);
+        Could not load repo source: ${e.message}. Static explanation still renders.</div>`);
     rp2Src = null; testSrc = null;
   }
 }
 
-/* ------------------------------------------------------------------ *
- *  2. Run the real test file in a Node-like sandbox, capturing output
- * ------------------------------------------------------------------ */
+/* ============ 2. run the real test file in a Node-like sandbox ============ */
 function runRealTests({ rp2Src, testSrc }) {
-  const lines = [];
-  let exitCode = 0;
+  const lines = []; let exitCode = 0;
   const proc = {
-    binding: (n) => { throw new Error("process.binding(" + n + ")"); },
+    binding: () => { throw new Error("process.binding()"); },
     exit: (c) => { exitCode = c; },
-    platform: "browser",
-    argv: ["node", "tests/rp2.asm.test.js"],
+    platform: "browser", argv: ["node", "tests/rp2.asm.test.js"],
   };
   const cache = {};
   function require(path) {
     if (String(path).includes("rp2/rp2.js")) {
       if (!cache.rp2) {
         const exp = {}; const mod = { exports: exp };
-        new Function("require", "exports", "module", "process", rp2Src)(
-          require, exp, mod, proc
-        );
+        new Function("require", "exports", "module", "process", rp2Src)(require, exp, mod, proc);
         cache.rp2 = mod;
       }
       return cache.rp2.exports;
     }
     throw new Error("no module resolver for: " + path);
   }
-  const clog = {
-    log: (...a) => lines.push(a.map(String).join(" ")),
-    info: (...a) => lines.push(a.map(String).join(" ")),
-    warn: (...a) => lines.push("[warn] " + a.map(String).join(" ")),
-    error: (...a) => lines.push("[error] " + a.map(String).join(" ")),
-  };
+  const clog = { log: (...a) => lines.push(a.map(String).join(" ")) };
   const mod = { exports: {} };
-  new Function("require", "exports", "module", "process", "console", testSrc)(
-    require, mod.exports, mod, proc, clog
-  );
+  new Function("require", "exports", "module", "process", "console", testSrc)(require, mod.exports, mod, proc, clog);
   return { lines, exitCode, rp2: cache.rp2 ? cache.rp2.exports : null };
 }
 
-/* ------------------------------------------------------------------ *
- *  3. Faithful PIO model (the native behavior the C fixes target)
- * ------------------------------------------------------------------ */
+/* ============ 3. faithful PIO model ============ */
 function makePioModel() {
-  const used = [0, 0];        // 32-bit used mask per PIO  (SDK `_used_instruction_space`)
-  const enabled = new Array(8).fill(false); // 2 PIOs x 4 SMs
+  const used = [0, 0];
+  const enabled = new Array(8).fill(false);
   const claimed = new Array(8).fill(false);
-  const log = [];
-
-  // pico-sdk: "work down from the top" — highest free contiguous run.
   function addProgram(pio, length) {
     if (length <= 0 || length > 32) return -1;
     for (let off = 32 - length; off >= 0; off--) {
-      let mask = 0;
-      for (let i = 0; i < length; i++) mask |= 1 << (off + i);
-      if ((used[pio] & mask) === 0) {
-        used[pio] |= mask;
-        log.push({ kind: "add", pio, offset: off, length });
-        return off;
-      }
+      let mask = 0; for (let i = 0; i < length; i++) mask |= 1 << (off + i);
+      if ((used[pio] & mask) === 0) { used[pio] |= mask; return off; }
     }
-    log.push({ kind: "add-fail", pio, offset: -1, length });
-    return -1; // out of PIO instruction memory
+    return -1;
   }
-  function clear(pio) { used[pio] = 0; log.push({ kind: "clear", pio }); }
-  function enable(pio, sm, en) { enabled[pio * 4 + sm] = en; }
-  function unclaim(pio, sm) { claimed[pio * 4 + sm] = false; }
-  function reset() { used[0] = 0; used[1] = 0; enabled.fill(false); claimed.fill(false); log.length = 0; }
-
-  return { used, enabled, claimed, log, addProgram, clear, enable, unclaim, reset,
-           get state() { return { used: used.slice(), enabled: enabled.slice() }; } };
+  function clear(pio) { used[pio] = 0; }
+  return {
+    used, enabled, claimed,
+    addProgram, clear,
+    enable: (pio, sm, en) => { enabled[pio * 4 + sm] = en; },
+    unclaim: (pio, sm) => { claimed[pio * 4 + sm] = false; },
+    reset() { used[0] = 0; used[1] = 0; enabled.fill(false); claimed.fill(false); },
+  };
 }
-
 /* The km_pio_cleanup() the fix adds (see targets/rp2/src/system.c). */
 function km_pio_cleanup(m) {
   for (let pio = 0; pio < 2; pio++) {
@@ -129,114 +129,47 @@ function km_pio_cleanup(m) {
   }
 }
 
-/* ------------------------------------------------------------------ *
- *  4. The five fixes, before / after
- * ------------------------------------------------------------------ */
-let MODE = "after"; // "before" | "after"
+/* ============ 4. shared animation runtime ============ */
+let MODE = "after";
+let token = { dead: false };
+// Stop any in-flight run, then hand the new run a FRESH LIVE token.
+// (Bug: this previously returned a dead token, so every button-triggered run
+//  bailed on its first `if (isDead(t)) return;` and rendered nothing — the
+//  "buttons don't visibly run anything" symptom.)
+function cancelCurrent() {
+  token.dead = true;        // mark the currently-running loop as dead (it references this object)
+  token = { dead: false };  // the new run gets a fresh, LIVE token
+  return token;
+}
+const isDead = (t) => t.dead;
 
-// Build a real 4-instruction PIO program with the REAL ASM (used to drive the
-// memory model with a genuine program length).
 function buildLedProgram(ASM) {
   const asm = new ASM();
-  // toggle pin 0 with delays — 4 instructions, the classic "blink" program
   asm.set("pindirs", 1).label("again").set("pins", 1).delay(2)
     .set("pins", 0).delay(1).jmp("again");
   return asm;
 }
 
-function set688() {
-  const beforeEl = $("#d688before"), bNote = $("#d688beforeNote");
-  const afterEl = $("#d688after"), aNote = $("#d688afterNote");
-  if (!rp2Src) { [beforeEl, afterEl].forEach(e => (e.textContent = "(source not loaded)")); return; }
-  // BEFORE (pre-fix behavior, simulated): old delay() did `c |= val << 8` with no check.
-  {
-    const inst = 0xe001 | (200 << 8); // SET pins 1, delay field "200"
-    const hi = inst & 0x1000;         // bit 13 — the sideset/instruction boundary
-    beforeEl.textContent = "0x" + inst.toString(16).padStart(4, "0");
-    beforeEl.classList.add("err");
-    bNote.textContent = `bits above the 5-bit field spill into the instruction opcode & sideset (${hi ? "bit 13 set → corrupted" : "—"}). Loaded silently; ran garbage.`;
-  }
-  // AFTER (real code): RangeError.
-  {
-    try {
-      const asm = buildLedProgram(RP2.ASM); asm.code[asm.code.length - 1]; asm.set("pins", 1).delay(200);
-      afterEl.textContent = "accepted??"; afterEl.classList.remove("ok");
-    } catch (e) {
-      afterEl.textContent = "RangeError: " + e.message;
-      afterEl.classList.add("ok");
-      aNote.textContent = "Rejected before it can clobber neighboring bits. Clean, predictable failure.";
-    }
-  }
+/* ---- pin LED (showcase) ---- */
+function setLed(state) { // 'idle' | 'blink' | 'lit'
+  const led = $("#pinLed");
+  led.classList.remove("lit", "blink");
+  const txt = $("#pinLedText");
+  if (state === "blink") { led.classList.add("blink"); txt.textContent = "pin 0 · SM0 RUNNING (blinking)"; }
+  else if (state === "lit") { led.classList.add("lit"); txt.textContent = "pin 0 · HIGH"; }
+  else txt.textContent = "pin 0 · idle";
+}
+function setSmLed(el, on, blink) {
+  el.classList.remove("on", "blink");
+  if (blink) el.classList.add("blink"); else if (on) el.classList.add("on");
 }
 
-function set689() {
-  if (!rp2Src) return;
-  // BEFORE (simulated): old code used this.code.push directly → no cap.
-  {
-    const code = []; for (let i = 0; i < 33; i++) code.push(0xa042);
-    const b = $("#d689before"), bn = $("#d689beforeNote");
-    b.textContent = "33 instructions accepted (no cap)";
-    b.classList.add("err");
-    bn.textContent = "Exceeds the 5-bit instruction offset (max 32). Fails unpredictably on the device.";
-  }
-  // AFTER (real code): "Program too long!" at the 33rd.
-  {
-    const a = $("#d689after"), an = $("#d689afterNote");
-    try {
-      const asm = new RP2.ASM(); for (let i = 0; i < 33; i++) asm.nop();
-      a.textContent = "33 accepted??"; a.classList.remove("ok");
-    } catch (e) {
-      a.textContent = "Error: " + e.message; a.classList.add("ok");
-      an.textContent = "32 is legal; the 33rd throws immediately, in the source, not on the board.";
-    }
-  }
-}
-
-function set686() {
-  const core = [".load", ".flash", ".reset", ".help", ".echo", ".sleep"];
-  const fsCmds = [".ls", ".pwd", ".cd", ".mkdir", ".rm", ".cat"];
-  function simulate(idempotent) {
-    const reg = [];
-    const register = (name) => {
-      if (idempotent) { const i = reg.indexOf(name); if (i >= 0) reg[i] = name; else reg.push(name); }
-      else reg.push(name); // pre-fix: always appends
-    };
-    const boot = () => { core.forEach(register); fsCmds.forEach(register); }; // module_fs_init
-    boot();
-    for (let k = 0; k < 3; k++) boot(); // three .load cycles re-run module_fs_init
-    return reg;
-  }
-  const before = simulate(false), after = simulate(true);
-  $("#d686beforeCount").textContent = before.length;
-  $("#d686afterCount").textContent = after.length;
-  $("#d686before").innerHTML = before.map(c => {
-    const dup = before.filter(x => x === c).length > 1;
-    return `<div><span class="cmd ${dup ? "dup" : ""}">${c}</span>${dup ? "  <span style='color:var(--red)'>×dup</span>" : ""}</div>`;
-  }).join("");
-  $("#d686after").innerHTML = after.map(c => `<div><span class="cmd">${c}</span></div>`).join("");
-  $("#d686note").textContent =
-    `Before: ${before.length} .help lines (the 6 fs commands × 4 boots). After: ${after.length} lines (registered once, then updated in place).`;
-}
-
-function set690text() {
-  const before = $("#d690before"), bN = $("#d690beforeNote");
-  const after = $("#d690after"), aN = $("#d690afterNote");
-  before.textContent = "SM0 enabled=1, executing stale program @ old offset";
-  before.classList.add("err");
-  bN.textContent = "SMs keep running after program end — they re-execute leftover instructions.";
-  after.textContent = "SM0 enabled=0, unclaimed, memory cleared";
-  after.classList.add("ok");
-  aN.textContent = "km_pio_cleanup() stops, unclaims and clears every SM + PIO memory on program end.";
-}
-
-/* ---------------- showcase: #690/#691 memory model ---------------- */
+/* ---- PIO memory / SM / trace rendering ---- */
 function renderMemory(m, currentOffset) {
-  const cells = $("#memCells");
-  cells.innerHTML = "";
+  const cells = $("#memCells"); cells.innerHTML = "";
   let usedCount = 0;
   for (let off = 31; off >= 0; off--) {
-    const el = document.createElement("div");
-    el.className = "cell";
+    const el = document.createElement("div"); el.className = "cell";
     const isUsed = (m.used[0] >> off) & 1;
     const isCur = currentOffset >= 0 && off >= currentOffset && off < currentOffset + 4;
     if (isCur) el.classList.add("cur");
@@ -249,97 +182,229 @@ function renderMemory(m, currentOffset) {
 }
 function renderSMs(m) {
   const row = $("#smRow"); row.innerHTML = "";
-  const labels = ["SM0", "SM1", "SM2", "SM3", "SM4", "SM5", "SM6", "SM7"];
-  for (let i = 0; i < 8; i++) {
+  const labels = ["SM0", "SM1", "SM2", "SM3"];
+  for (let i = 0; i < 4; i++) {
     const on = m.enabled[i];
     const el = document.createElement("div");
     el.className = "sm " + (on ? "running" : "stopped");
-    el.innerHTML = `<div class="id">pio${i > 3 ? 1 : 0} · ${labels[i]}</div>
+    el.innerHTML = `<div class="id">pio0 · ${labels[i]}</div>
       <div class="state"><span class="d"></span>${on ? "running" : "stopped"}</div>`;
     row.appendChild(el);
   }
 }
-function renderTrace(offsets) {
+function renderTrace(offsets, upto) {
   const t = $("#offsetTrace"); t.innerHTML = "";
-  offsets.forEach((o, i) => {
+  const shown = offsets.slice(0, upto + 1);
+  shown.forEach((o, i) => {
     const neg = o < 0;
     const el = document.createElement("div");
     el.className = "t " + (neg ? "neg" : (MODE === "after" ? "stable" : ""));
     el.textContent = "run" + i + "→" + (neg ? "FAIL" : o);
     el.title = neg ? "out of PIO instruction memory" : "program offset";
     t.appendChild(el);
-    if (i < offsets.length - 1) t.appendChild(Object.assign(document.createElement("span"), { className: "arr", textContent: "›" }));
+    if (i < shown.length - 1) t.appendChild(Object.assign(document.createElement("span"), { className: "arr", textContent: "›" }));
   });
 }
+function setStatus(html) { $("#pioStatus").innerHTML = html; }
 
-function simulateRuns() {
+/* ============ 5. SHOWCASE animation (#690/#691) ============ */
+const RUNS = 8;
+function doShowcase(t) {
   const m = makePioModel();
-  const len = 4; // real LED program length
-  const runs = 10;
   const offsets = [];
-  let lastOffset = -1;
-  for (let i = 0; i < runs; i++) {
-    // each .load = fresh JS heap → SM ids reset to all available
-    const off = m.addProgram(0, len);
-    offsets.push(off);
-    lastOffset = off;
-    if (off >= 0) m.enable(0, 0, true); // SM0 started
-    // teardown at program end
-    if (MODE === "after") km_pio_cleanup(m);
-    else { /* buggy teardown: nothing is reset — this is the #690/#691 bug */ }
-    paintProgress(m, offsets, lastOffset);
-  }
-  paintProgress(m, offsets, lastOffset, true);
+  const len = 4;
+  (async () => {
+    for (let i = 0; i < RUNS; i++) {
+      if (isDead(t)) return;
+      const off = m.addProgram(0, len);
+      offsets.push(off);
+      if (off >= 0) m.enable(0, 0, true); // SM0 started
+      renderMemory(m, off); renderSMs(m); renderTrace(offsets, i);
+      if (off >= 0) { setLed("blink"); setStatus(`<span style="color:var(--amber)">run ${i}</span> · program @ offset ${off} · SM0 running…`); }
+      else { setStatus(`<span style="color:var(--red)">run ${i} · FAIL — out of PIO instruction memory</span>`); }
+      await sleep(SPEED * 0.9); if (isDead(t)) return;
+
+      // program end / teardown
+      if (MODE === "after") {
+        km_pio_cleanup(m);
+        renderMemory(m, -1); renderSMs(m);
+        setLed("idle");
+        setStatus(`<span style="color:var(--green)">run ${i} end</span> · km_pio_cleanup() → SM0 stopped, memory cleared`);
+      } else {
+        renderMemory(m, -1);
+        setLed("blink");
+        setStatus(`<span style="color:var(--red)">run ${i} end</span> · no teardown — SM0 <b>still running</b> on stale memory`);
+      }
+      await sleep(SPEED); if (isDead(t)) return;
+    }
+    // final verdict
+    if (MODE === "after") {
+      renderMemory(m, -1); renderSMs(m); setLed("idle");
+      setStatus(`<b style="color:var(--green)">✓ stable.</b> Every run re-allocates at the same top slot (km_pio_cleanup clears memory + stops SMs between runs).`);
+    } else {
+      renderMemory(m, -1);
+      setLed("blink");
+      setStatus(`<b style="color:var(--red)">✗ fault.</b> Memory never cleared → allocator runs out (top-down) and SMs keep running on stale instructions. Only flash_nuke recovers the part.`);
+    }
+  })();
 }
 
-function paintProgress(m, offsets, lastOffset, final = false) {
-  renderMemory(m, lastOffset);
-  renderSMs(m);
-  renderTrace(offsets);
-  const status = $("#pioStatus");
-  const failed = offsets.some(o => o < 0);
-  if (MODE === "after") {
-    status.innerHTML = final
-      ? `<b>✓ stable.</b> Every run re-allocates at the same top slot because km_pio_cleanup() clears memory + stops SMs between runs. SMs are <b>stopped</b> after each program ends.`
-      : "allocating…";
-  } else {
-    status.innerHTML = failed
-      ? `<span style="color:var(--red)">✗ fault.</span> PIO memory never cleared → each run allocates lower (top-down) until there's no room: <b>out of PIO instruction memory</b>. SMs left <b>running</b> on stale instructions. Only <code>flash_nuke</code> recovers the part.`
-      : "allocating (no teardown)…";
+/* ============ 6. the other fixes (animated) ============ */
+function set688bits(spill) {
+  const wrap = $("#d688bits"); wrap.innerHTML = "";
+  // 16 bits, left = bit15 .. right = bit0. delay = bits 12..8 (5). opcode 15..12 (SET=1110).
+  for (let b = 15; b >= 0; b--) {
+    const cell = document.createElement("div"); cell.className = "bit";
+    let cls = "";
+    if (b >= 12 && b <= 15) cls = "op";
+    else if (b >= 8 && b <= 12) cls = "delay";
+    if (cls) cell.classList.add(cls); // guard: classList.add('') throws a SyntaxError in real browsers
+    cell.textContent = b;
+    // SET pins 1 = opcode 1110 (bits 15-12), dest bits 7-5 = 000, set count bit0=1
+    if (b === 15 || b === 14) cell.classList.add("set");      // opcode 1,1
+    if (b === 12) cell.classList.add("set");                  // opcode 0
+    if (b === 0) cell.classList.add("set");                   // set value bit
+    if (spill && b >= 13) cell.classList.add("spill");        // 200 = 11001000 spills into 15..13
+    wrap.appendChild(cell);
   }
 }
 
-/* ---------------- test terminal ---------------- */
-function paintTestOutput(lines, exitCode) {
-  const out = $("#termOut");
-  out.innerHTML = "";
-  const frag = document.createDocumentFragment();
-  lines.forEach((ln) => {
+function run688(t) {
+  const bEl = $("#d688before"), aEl = $("#d688after");
+  const bNote = $("#d688beforeNote"), aNote = $("#d688afterNote");
+  bEl.textContent = "…"; aEl.textContent = "…";
+  (async () => {
+    // BEFORE: old delay() did c |= val<<8 with no check → bits spill
+    set688bits(true);
+    await sleep(SPEED * 0.8); if (isDead(t)) return;
+    bEl.textContent = "0x" + (0xe001 | (200 << 8)).toString(16);
+    bEl.classList.add("err"); bEl.classList.remove("ok");
+    bEl.classList.remove("pulse"); void bEl.offsetWidth; bEl.classList.add("pulse");
+    bNote.textContent = `delay=200 (0b11001000) needs 8 bits — 3 spill past the 5-bit field into the opcode/sideset bits (red). Loads silently → garbage.`;
+    await sleep(SPEED * 0.6); if (isDead(t)) return;
+    // AFTER: real code throws before touching the bits
+    aEl.textContent = "…";
+    await sleep(SPEED * 0.5); if (isDead(t)) return;
+    if (RP2) {
+      try { new RP2.ASM().set("pins", 1).delay(200); aEl.textContent = "accepted?"; }
+      catch (e) { aEl.textContent = "RangeError: " + e.message; aEl.classList.add("ok"); }
+    } else { aEl.textContent = "RangeError: delay out of range"; aEl.classList.add("ok"); }
+    aNote.textContent = "Rejected up front — the field can't be corrupted. Clean, predictable failure.";
+  })();
+}
+
+function run689(t) {
+  const bar = $("#d689bar");
+  const bEl = $("#d689before"), aEl = $("#d689after");
+  const bNote = $("#d689beforeNote"), aNote = $("#d689afterNote");
+  bar.style.width = "0%"; bar.classList.remove("over");
+  (async () => {
+    // BEFORE: no cap — fills all the way past 32
+    for (let i = 1; i <= 33; i++) {
+      if (isDead(t)) return;
+      bar.style.width = Math.min(100, (i / 33) * 100) + "%";
+      if (i > 32) bar.classList.add("over");
+      await sleep(SPEED * 0.35);
+    }
+    bEl.textContent = "33 instructions accepted (no cap)"; bEl.classList.add("err");
+    bNote.textContent = "Overflow the 5-bit offset (max 32) — fails unpredictably on the device.";
+    await sleep(SPEED * 0.6); if (isDead(t)) return;
+    // AFTER: real code stops at 33
+    aEl.textContent = "…";
+    await sleep(SPEED * 0.5); if (isDead(t)) return;
+    if (RP2) {
+      try { const a = new RP2.ASM(); for (let i = 0; i < 33; i++) a.nop(); aEl.textContent = "accepted?"; }
+      catch (e) { aEl.textContent = "Error: " + e.message; aEl.classList.add("ok"); }
+    } else { aEl.textContent = "Error: Program too long!"; aEl.classList.add("ok"); }
+    aNote.textContent = "32 is legal; the 33rd throws immediately, in the source — not on the board.";
+  })();
+}
+
+function run686(t) {
+  const core = [".load", ".flash", ".reset", ".help", ".echo", ".sleep"];
+  const fs = [".ls", ".pwd", ".cd", ".mkdir", ".rm", ".cat"];
+  const beforeEl = $("#d686before"), afterEl = $("#d686after");
+  beforeEl.innerHTML = ""; afterEl.innerHTML = "";
+  const beforeCount = $("#d686beforeCount"), afterCount = $("#d686afterCount");
+  beforeCount.textContent = "…"; afterCount.textContent = "…";
+  const pushLine = (el, name, dup) => {
+    const d = document.createElement("div");
+    d.innerHTML = `<span class="cmd ${dup ? "dup" : ""}">${name}</span>${dup ? "  <span style='color:var(--red)'>×dup</span>" : ""}`;
+    el.appendChild(d); el.scrollTop = el.scrollHeight;
+  };
+  (async () => {
+    for (let boot = 1; boot <= 4; boot++) {
+      if (isDead(t)) return;
+      const all = [...core, ...fs];
+      for (const name of all) {
+        if (isDead(t)) return;
+        const dup = fs.includes(name) && boot > 1;
+        pushLine(beforeEl, name, dup);
+        if (!afterEl.querySelector(`.cmd[data-n="${name}"]`)) {
+          const d = document.createElement("div");
+          d.innerHTML = `<span class="cmd" data-n="${name}">${name}</span>`;
+          afterEl.appendChild(d); afterEl.scrollTop = afterEl.scrollHeight;
+        }
+        await sleep(18);
+      }
+      await sleep(SPEED * 0.5);
+      beforeCount.textContent = beforeEl.children.length;
+      afterCount.textContent = afterEl.children.length;
+    }
+    if (isDead(t)) return;
+    beforeCount.textContent = beforeEl.children.length;
+    afterCount.textContent = afterEl.children.length;
+    $("#d686note").textContent = `Before: ${beforeEl.children.length} .help lines (the 6 fs commands re-registered on every boot). After: ${afterEl.children.length} lines (registered once, then updated in place).`;
+  })();
+}
+
+function run690(t) {
+  const bLed = $("#d690ledBefore"), aLed = $("#d690ledAfter");
+  const bEl = $("#d690before"), aEl = $("#d690after");
+  (async () => {
+    // BEFORE: SM0 keeps running after program end → LED stays blinking
+    setSmLed(bLed, true, true);
+    bEl.textContent = "…"; await sleep(SPEED * 0.7); if (isDead(t)) return;
+    bEl.textContent = "SM0 enabled=1, executing stale program @ old offset"; bEl.classList.add("err");
+    $("#d690beforeNote").textContent = "Left enabled after the program ended — it keeps re-executing leftover instructions.";
+    await sleep(SPEED * 0.8); if (isDead(t)) return;
+    // AFTER: cleanup stops it → LED goes out
+    aEl.textContent = "…"; await sleep(SPEED * 0.5); if (isDead(t)) return;
+    setSmLed(aLed, false, false);
+    aEl.textContent = "SM0 enabled=0, unclaimed, memory cleared"; aEl.classList.add("ok");
+    $("#d690afterNote").textContent = "km_pio_cleanup() stops, unclaims and clears every SM + PIO memory on program end.";
+  })();
+}
+
+/* ============ 7. test terminal (stream in) ============ */
+async function streamTests(t) {
+  const out = $("#termOut"); out.innerHTML = "";
+  const btn = $("#btnRunTests");
+  btn.classList.add("loading");
+  const res = runRealTests({ rp2Src, testSrc });
+  RP2 = res.rp2;
+  for (const ln of res.lines) {
+    if (isDead(t)) { btn.classList.remove("loading"); return; }
     const div = document.createElement("div");
     if (ln.trim().startsWith("\u2713")) div.className = "pass";
     else if (ln.trim().startsWith("\u2717")) div.className = "fail";
     else if (/^(Issue|Encoding|StateMachine|PIO)/.test(ln.trim())) div.className = "sec";
     else if (/\d+ passed/.test(ln)) div.className = "sum";
     div.textContent = ln.length ? ln : "\u00a0";
-    frag.appendChild(div);
-  });
-  out.appendChild(frag);
-  out.scrollTop = out.scrollHeight;
-  const passed = (lines.join("\n").match(/\u2713/g) || []).length;
-  const failedN = (lines.join("\n").match(/\u2717/g) || []).length;
+    out.appendChild(div); out.scrollTop = out.scrollHeight;
+    await sleep(14);
+  }
+  const passed = (res.lines.join("\n").match(/\u2713/g) || []).length;
+  const failedN = (res.lines.join("\n").match(/\u2717/g) || []).length;
   $("#termStat").innerHTML = failedN
     ? `${passed} passed, <b style="color:var(--red)">${failedN} failed</b>`
     : `<b>${passed} passed</b>, 0 failed · exit 0`;
+  btn.classList.remove("loading");
 }
 
-/* ------------------------------------------------------------------ *
- *  5. Wire up
- * ------------------------------------------------------------------ */
+/* ============ 8. orchestration ============ */
 let RP2 = null;
-function applyMode() {
-  MODE = MODE; // keep
-  $("#btnBefore").setAttribute("aria-pressed", MODE === "before");
-  $("#btnAfter").setAttribute("aria-pressed", MODE === "after");
+function runAll(t) {
   const title = $("#pioCardTitle"), desc = $("#pioCardDesc");
   if (MODE === "after") {
     title.textContent = "After the fix — stable program offset across runs";
@@ -348,30 +413,33 @@ function applyMode() {
     title.textContent = "Before the fix — PIO memory never reset (the bug)";
     desc.textContent = "No cleanup between runs: the allocator runs out of memory and SMs keep running on stale instructions.";
   }
-  if (rp2Src) { set688(); set689(); }
-  set686(); set690text();
-  simulateRuns();
+  $("#btnBefore").setAttribute("aria-pressed", MODE === "before");
+  $("#btnAfter").setAttribute("aria-pressed", MODE === "after");
+  doShowcase(t);
+  if (rp2Src) { run688(t); run689(t); }
+  run686(t); run690(t);
 }
 
 function init() {
-  if (rp2Src) {
-    const res = runRealTests({ rp2Src, testSrc });
-    RP2 = res.rp2;
-    paintTestOutput(res.lines, res.exitCode);
-  } else {
-    paintTestOutput(["(real test source could not be loaded in this context)"], 1);
-  }
-  set686(); set690text();
-  applyMode();
-
-  $("#btnBefore").addEventListener("click", () => { MODE = "before"; applyMode(); });
-  $("#btnAfter").addEventListener("click", () => { MODE = "after"; applyMode(); });
-  $("#btnSim").addEventListener("click", simulateRuns);
-  $("#btnResetPio").addEventListener("click", simulateRuns);
-  $("#btnRunTests").addEventListener("click", () => {
-    const res = runRealTests({ rp2Src, testSrc });
-    RP2 = res.rp2; paintTestOutput(res.lines, res.exitCode);
+  set688bits(false);
+  runAll(token);
+  $("#btnBefore").addEventListener("click", () => { const t = cancelCurrent(); MODE = "before"; runAll(t); });
+  $("#btnAfter").addEventListener("click", () => { const t = cancelCurrent(); MODE = "after"; runAll(t); });
+  $("#btnRun").addEventListener("click", () => { const t = cancelCurrent(); doShowcase(t); });
+  $("#btnStop").addEventListener("click", () => { cancelCurrent(); setLed("idle"); setStatus("stopped."); });
+  $("#btnStep").addEventListener("click", () => {
+    cancelCurrent();
+    // single step in current mode
+    const m = makePioModel(); const off = m.addProgram(0, 4);
+    if (off >= 0) { m.enable(0, 0, true); setLed("blink"); }
+    renderMemory(m, off); renderSMs(m);
+    setStatus(off >= 0 ? `step · program @ offset ${off}, SM0 ${MODE === "after" ? "(will be cleaned up)" : "(not cleaned up)"}` : `step · FAIL — out of PIO instruction memory`);
   });
+  $("#btn688").addEventListener("click", () => { if (rp2Src) run688(cancelCurrent()); });
+  $("#btn689").addEventListener("click", () => { if (rp2Src) run689(cancelCurrent()); });
+  $("#btn686").addEventListener("click", () => run686(cancelCurrent()));
+  $("#btn690").addEventListener("click", () => run690(cancelCurrent()));
+  $("#btnRunTests").addEventListener("click", () => streamTests(cancelCurrent()));
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

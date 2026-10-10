@@ -73,18 +73,22 @@
           <div class="mem">
             <div class="mtitle"><span>pio 0 · instruction memory</span><span id="memUsed">used: 0/32</span></div>
             <div class="cells" id="memCells"></div>
+            <div class="runrow" style="margin-top:12px">
+              <div class="led" id="pinLed"><span class="led-dot"></span><span class="led-text" id="pinLedText">pin 0 · idle</span></div>
+            </div>
           </div>
           <div>
             <div class="trace" id="offsetTrace"></div>
-            <div style="margin:16px 0 6px; color:var(--muted); font-size:13px;">State machines after program end:</div>
-            <div class="smrow" id="smRow"></div>
+            <div style="margin:16px 0 6px; color:var(--muted); font-size:13px;">State machine after program end:</div>
+            <div class="smrow" id="smRow" style="grid-template-columns:repeat(4,1fr)"></div>
             <div class="status-line" id="pioStatus"></div>
           </div>
         </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
-          <button class="btn primary" id="btnSim">▶ Simulate 10 × .load runs</button>
-          <button class="btn" id="btnResetPio">Reset</button>
-          <span class="hint">A 4-instruction PIO program is loaded on each run (as kaluma does).</span>
+        <div class="runrow">
+          <button class="btn primary runbtn" id="btnRun">▶ Run the program</button>
+          <button class="btn runbtn" id="btnStop">■ Stop</button>
+          <button class="btn runbtn" id="btnStep" title="advance one .load run">⏭ Step .load</button>
+          <span class="hint">Runs one .load → execute (SM0 blinks) → end, so you can <b>watch</b> it.</span>
         </div>
       </div>
     </div>
@@ -104,6 +108,8 @@
         <div class="head"><span class="badge">#688</span><div><h3>delay() bounds checking</h3><div class="desc">An out-of-range delay silently corrupted the instruction/sideset bits.</div></div></div>
         <div class="body">
           <div class="code">asm.set("pins", 1).delay(<span class="n">200</span>)</div>
+          <div class="bits" id="d688bits"></div>
+          <div class="hint" style="margin:2px 0 10px">16-bit instruction: opcode (bits 15–12) · sideset (13) · <b>delay (12–8, 5 bits)</b> · dest/set</div>
           <div class="ba">
             <div class="col before">
               <span class="tag">Before</span>
@@ -116,6 +122,7 @@
               <div class="note" id="d688afterNote"></div>
             </div>
           </div>
+          <div class="runrow"><button class="btn runbtn" id="btn688">▶ Run delay(200)</button></div>
         </div>
       </div>
 
@@ -124,6 +131,8 @@
         <div class="head"><span class="badge">#689</span><div><h3>program size limit</h3><div class="desc">No cap → over-long programs failed to load unpredictably.</div></div></div>
         <div class="body">
           <div class="code">for (let i = 0; i &lt; <span class="n">33</span>; i++) asm.nop()</div>
+          <div class="bar"><div class="bar-fill" id="d689bar"></div></div>
+          <div class="bar-scale"><span>0</span><span>32 (limit)</span><span>33</span></div>
           <div class="ba">
             <div class="col before">
               <span class="tag">Before</span>
@@ -136,6 +145,7 @@
               <div class="note" id="d689afterNote"></div>
             </div>
           </div>
+          <div class="runrow"><button class="btn runbtn" id="btn689">▶ Build 33 instructions</button></div>
         </div>
       </div>
 
@@ -155,6 +165,7 @@
             </div>
           </div>
           <div class="note" id="d686note"></div>
+          <div class="runrow"><button class="btn runbtn" id="btn686">▶ Replay 4 boots</button></div>
         </div>
       </div>
 
@@ -164,12 +175,12 @@
         <div class="body">
           <div class="ba">
             <div class="col before">
-              <span class="tag">Before · after program end</span>
+              <div class="headrow"><span class="tag">Before · after program end</span><span class="mled" id="d690ledBefore"></span></div>
               <div class="res err" id="d690before"></div>
               <div class="note" id="d690beforeNote"></div>
             </div>
             <div class="col after">
-              <span class="tag">Fixed · after program end</span>
+              <div class="headrow"><span class="tag">Fixed · after program end</span><span class="mled" id="d690ledAfter"></span></div>
               <div class="res ok" id="d690after"></div>
               <div class="note" id="d690afterNote"></div>
             </div>
@@ -185,6 +196,7 @@ void km_pio_cleanup() {
     pio_clear_instruction_memory(pio);
   }
 }</div>
+          <div class="runrow"><button class="btn runbtn" id="btn690">▶ End program, watch cleanup</button></div>
         </div>
       </div>
 
