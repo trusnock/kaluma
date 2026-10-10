@@ -25,19 +25,28 @@ async function loadText(p) {
   return r.text();
 }
 
-let rp2Src = null, testSrc = null;
+let rp2Src = null, testSrc = null, usedFallback = false;
 try {
   [rp2Src, testSrc] = await Promise.all([
     loadText("src/modules/rp2/rp2.js"),
     loadText("tests/rp2.asm.test.js"),
   ]);
-  $("#srcStatus") && ($("#srcStatus").textContent = "real repo code loaded");
 } catch (e) {
-  document.body.insertAdjacentHTML("beforeend",
-    `<div style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#3b0d18;color:#ffd9de;border:1px solid #fb7185;padding:10px 16px;border-radius:12px;font-family:var(--mono);font-size:13px;z-index:99">
-      Could not load repo source for the live section: ${e.message}. The static explanation still renders.
-    </div>`);
-  rp2Src = null; testSrc = null;
+  // Fallback to the auto-generated bundle (base64 of the same two real files)
+  // so the demo works from any serving root or opened as a local file.
+  const B = self.__KALUMA_DEMO_BUNDLE__;
+  if (B) {
+    const fromB64 = (s) => atob(s);
+    rp2Src = fromB64(B.rp2);
+    testSrc = fromB64(B.test);
+    usedFallback = true;
+  } else {
+    document.body.insertAdjacentHTML("beforeend",
+      `<div style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#3b0d18;color:#ffd9de;border:1px solid #fb7185;padding:10px 16px;border-radius:12px;font-family:var(--mono);font-size:13px;z-index:99">
+        Could not load repo source for the live section: ${e.message}. The static explanation still renders.
+      </div>`);
+    rp2Src = null; testSrc = null;
+  }
 }
 
 /* ------------------------------------------------------------------ *
