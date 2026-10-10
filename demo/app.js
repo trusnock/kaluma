@@ -207,8 +207,13 @@ function renderTrace(offsets, upto) {
 }
 function setStatus(html) { $("#pioStatus").innerHTML = html; }
 
-/* ============ 5. SHOWCASE animation (#690/#691) ============ */
-const RUNS = 8;
+/* ============ 5. SHOWCASE animation (#690/#691) ============
+ * len = 4 instructions, so 8 programs fill the 32-slot PIO memory exactly
+ * (offsets 28 → 0). RUNS = 9 so the 9th program is the FIRST to not fit
+ * (offset −1) — that is the #691 "allocator runs out" the bug report hit.
+ * After-mode cleans up every run, so all 9 land at the same top slot (28).
+ * (With 8 runs nothing ever failed, yet the verdict claimed "runs out".) */
+const RUNS = 9;
 function doShowcase(t) {
   const m = makePioModel();
   const offsets = [];
@@ -218,10 +223,10 @@ function doShowcase(t) {
       if (isDead(t)) return;
       const off = m.addProgram(0, len);
       offsets.push(off);
-      if (off >= 0) m.enable(0, 0, true); // SM0 started
+      if (off >= 0) m.enable(0, 0, true); // SM0 started (only if the program fit)
       renderMemory(m, off); renderSMs(m); renderTrace(offsets, i);
       if (off >= 0) { setLed("blink"); setStatus(`<span style="color:var(--amber)">run ${i}</span> · program @ offset ${off} · SM0 running…`); }
-      else { setStatus(`<span style="color:var(--red)">run ${i} · FAIL — out of PIO instruction memory</span>`); }
+      else { setLed("blink"); setStatus(`<span style="color:var(--red)">run ${i} · FAIL — no room in PIO instruction memory (offset ${off})</span>`); }
       await sleep(SPEED * 0.9); if (isDead(t)) return;
 
       // program end / teardown
@@ -230,11 +235,13 @@ function doShowcase(t) {
         renderMemory(m, -1); renderSMs(m);
         setLed("idle");
         setStatus(`<span style="color:var(--green)">run ${i} end</span> · km_pio_cleanup() → SM0 stopped, memory cleared`);
-      } else {
-        renderMemory(m, -1);
+      } else if (off >= 0) {
+        // before mode, program fit: no teardown — SM0 left enabled on stale memory
+        renderSMs(m);
         setLed("blink");
         setStatus(`<span style="color:var(--red)">run ${i} end</span> · no teardown — SM0 <b>still running</b> on stale memory`);
       }
+      // else: before mode, program did NOT fit — leave the FAIL status + SMs running as-is
       await sleep(SPEED); if (isDead(t)) return;
     }
     // final verdict
@@ -421,8 +428,19 @@ function runAll(t) {
 }
 
 function init() {
-  set688bits(false);
-  runAll(token);
+  // Load the REAL rp2.js now (not just when "Run tests" is clicked) so the
+  // #688/#689 "Fixed" sides show the code's ACTUAL error text from first paint
+  // (e.g. `delay value must be an integer in the range 0-31 (got 200)`), and
+  // the test terminal is already populated on load.
+  (async () => {
+    if (rp2Src) {
+      const r = runRealTests({ rp2Src, testSrc });
+      RP2 = r.rp2;
+      await streamTests(token);
+    }
+    set688bits(false);
+    runAll(token);
+  })();
   $("#btnBefore").addEventListener("click", () => { const t = cancelCurrent(); MODE = "before"; runAll(t); });
   $("#btnAfter").addEventListener("click", () => { const t = cancelCurrent(); MODE = "after"; runAll(t); });
   $("#btnRun").addEventListener("click", () => { const t = cancelCurrent(); doShowcase(t); });
