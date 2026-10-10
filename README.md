@@ -35,3 +35,44 @@ __Kaluma__ is a tiny and efficient **JavaScript runtime** for [RP2040 (Raspberry
 - Has **built-in modules** including file systems (LittleFS, FAT), graphics, networking and more.
 - Support RP2's **PIO (Programmable I/O) assembly** embeddable in JavaScript code.
 - Provides very friendly API that resembles **Node.js** and **Arduino**.
+
+# Try the PIO fixes in your browser
+
+There's an interactive **PIO Workbench** demo that shows each of the five fixed
+bugs (#686, #688, #689, #690, #691) working **before → after** live, running the
+**real fixed `rp2.js`** and the **real test suite** in your browser.
+
+**Easiest — no install, no server, just double-click:**
+
+```
+open demo/standalone.html        # one self-contained file — it works from disk
+```
+
+(`standalone.html` is a pre-built single file. Rebuild it anytime with
+`node tools/build-standalone.js` if the demo source changes.)
+
+**Or serve the repo** (then the demo runs the *live* `rp2.js`/test file straight
+from the repo instead of its bundled copy):
+
+```
+cd kaluma
+python3 -m http.server 8080      # or: npx serve .
+# → http://localhost:8080/demo/
+```
+
+And the checks it runs can also be run headless, no browser:
+
+```
+node tests/rp2.asm.test.js       # the real 25-assertion suite → 25 passed, 0 failed
+node tools/verify-demos.js       # drives the real demo card code, asserts every before/after state
+```
+
+> **What's real, what's a model:** the PIO *JavaScript* (instruction encoding, the
+> `delay()` range guard, the 32-instruction limit, state-machine ID allocation) and
+> the 25-assertion test suite run as the **real repo code** in your browser/Node.
+> The hardware side — state machines actually stepping, PIO instruction memory
+> filling/draining, and the `km_pio_cleanup()` teardown — is driven by a **faithful
+> model of the pico-sdk behavior** (clearly labeled as such in the UI), because a
+> real Pico can't run in a browser. The C-side fix itself is **build-verified, not
+> hardware-tested** (no Pico in the loop). See [demo/README.md](./demo/README.md)
+> for the full breakdown.

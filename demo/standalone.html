@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kaluma PIO Workbench — 5 fixes, live — standalone</title>
+<style>
+:root {
+  --bg: #0a0e1a;
+  --bg2: #0f1526;
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text: #e6ecff;
+  --muted: #8b93b4;
+  --muted2: #626a8a;
+  --teal: #2dd4bf;
+  --violet: #a78bfa;
+  --pink: #f472b6;
+  --green: #34d399;
+  --red: #fb7185;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, Consolas, monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 16px;
+  --shadow: 0 10px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--sans);
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(167, 139, 250, 0.18), transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, rgba(45, 212, 191, 0.14), transparent 55%),
+    radial-gradient(900px 900px at 50% 120%, rgba(96, 165, 250, 0.12), transparent 60%),
+    linear-gradient(180deg, var(--bg), var(--bg2));
+  background-attachment: fixed;
+  min-height: 100vh;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--teal); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 22px 96px; }
+
+/* top bar */
+.topbar { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); background: rgba(10, 14, 26, 0.72); border-bottom: 1px solid var(--border); }
+.topbar .inner { max-width: 1120px; margin: 0 auto; padding: 12px 22px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
+.brand .logo { width: 30px; height: 30px; border-radius: 9px; background: conic-gradient(from 210deg, var(--teal), var(--violet), var(--pink), var(--teal)); box-shadow: 0 0 0 1px rgba(255,255,255,.15), 0 6px 18px -6px rgba(167,139,250,.8); display: grid; place-items: center; color: #05070f; font-size: 15px; }
+.brand small { color: var(--muted); font-weight: 500; margin-left: 2px; }
+.topbar .spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--panel); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(52,211,153,.18); }
+
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 11px; overflow: hidden; background: var(--panel); }
+.seg button { appearance: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; cursor: pointer; transition: all .18s ease; }
+.seg button[aria-pressed="true"] { color: #05070f; }
+.seg button[aria-pressed="true"].before { background: linear-gradient(180deg, #ff8fa3, var(--red)); }
+.seg button[aria-pressed="true"].after  { background: linear-gradient(180deg, #7cf0d3, var(--teal)); }
+
+/* hero */
+.hero { padding: 56px 0 26px; }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--violet); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--panel); }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.08; margin: 18px 0 12px; letter-spacing: -0.02em; background: linear-gradient(180deg, #ffffff, #c7d0f5); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.hero p.lead { font-size: 17px; color: var(--muted); max-width: 780px; margin: 0; }
+.hero .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; background: var(--panel); }
+.chip b { color: var(--teal); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.swatch { width: 12px; height: 12px; border-radius: 4px; }
+
+/* sections */
+.section { margin-top: 54px; }
+.section > h2 { font-size: 22px; letter-spacing: -0.01em; margin: 0 0 4px; }
+.section > p.sub { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+
+.card { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02)); box-shadow: var(--shadow); overflow: hidden; }
+.card .head { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 12px; }
+.badge { flex: none; font-family: var(--mono); font-size: 12px; font-weight: 700; color: #05070f; border-radius: 8px; padding: 5px 9px; background: linear-gradient(180deg, #cdd6ff, var(--violet)); }
+.card h3 { margin: 2px 0 2px; font-size: 16px; }
+.card .desc { font-size: 13.5px; color: var(--muted); }
+.card .body { padding: 16px 18px 20px; }
+
+.ba { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .ba { grid-template-columns: 1fr; } }
+.ba .col { border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px; background: rgba(0,0,0,.18); }
+.ba .col.before { border-color: rgba(251,113,133,.35); }
+.ba .col.after  { border-color: rgba(52,211,153,.4); }
+.col .tag { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
+.col.before .tag { color: var(--red); }
+.col.after .tag { color: var(--green); }
+.col .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+.col.before .tag::before { background: var(--red); }
+.col.after .tag::before { background: var(--green); }
+.col .res { font-family: var(--mono); font-size: 13px; color: var(--text); word-break: break-word; }
+.col .res.err { color: var(--red); }
+.col .res.ok  { color: var(--green); }
+.col .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+.code { font-family: var(--mono); font-size: 12.5px; color: #cdd6ff; background: #0a0f1f; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; overflow-x: auto; margin: 10px 0; white-space: pre; }
+
+/* PIO memory grid */
+.hero-grid { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 22px; align-items: start; }
+@media (max-width: 820px) { .hero-grid { grid-template-columns: 1fr; } }
+.mem { border: 1px solid var(--border-strong); border-radius: 14px; padding: 14px; background: rgba(0,0,0,.28); box-shadow: inset 0 0 40px -20px rgba(167,139,250,.5); }
+.mem .mtitle { font-size: 12px; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+.cells { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.cell { position: relative; height: 26px; border-radius: 7px; border: 1px solid var(--border); background: rgba(255,255,255,.02); display: flex; align-items: center; padding: 0 8px; font-family: var(--mono); font-size: 11px; color: var(--muted2); transition: all .3s ease; }
+.cell .off { position: absolute; right: 8px; }
+.cell.used { background: linear-gradient(180deg, rgba(167,139,250,.5), rgba(167,139,250,.25)); border-color: rgba(167,139,250,.6); color: #efe9ff; }
+.cell.cur { background: linear-gradient(180deg, rgba(45,212,191,.6), rgba(45,212,191,.3)); border-color: var(--teal); color: #04110d; font-weight: 700; box-shadow: 0 0 0 2px rgba(45,212,191,.25); }
+.cell.fail { background: linear-gradient(180deg, rgba(251,113,133,.6), rgba(251,113,133,.3)); border-color: var(--red); color: #fff; font-weight: 700; }
+
+.trace { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.trace .t { font-family: var(--mono); font-size: 14px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); }
+.trace .t.neg { border-color: var(--red); color: var(--red); background: rgba(251,113,133,.12); }
+.trace .t.stable { border-color: var(--teal); color: var(--teal); background: rgba(45,212,191,.1); }
+.trace .arr { color: var(--muted2); }
+
+.smrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 6px; }
+@media (max-width: 620px) { .smrow { grid-template-columns: repeat(2,1fr); } }
+.sm { border: 1px solid var(--border); border-radius: 11px; padding: 10px 11px; background: rgba(0,0,0,.2); }
+.sm .id { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.sm .state { margin-top: 6px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.sm .state .d { width: 9px; height: 9px; border-radius: 50%; }
+.sm.running .state .d { background: var(--red); box-shadow: 0 0 0 3px rgba(251,113,133,.2); animation: pulse 1.1s infinite; }
+.sm.stopped .state .d { background: var(--green); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+/* terminal */
+.term { border: 1px solid var(--border-strong); border-radius: 14px; overflow: hidden; background: #070b16; box-shadow: var(--shadow); }
+.term .bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: rgba(255,255,255,.04); border-bottom: 1px solid var(--border); }
+.term .bar .lights { display: flex; gap: 6px; }
+.term .bar .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+.term .bar .lights i:nth-child(1){background:#ff5f57} .term .bar .lights i:nth-child(2){background:#febc2e} .term .bar .lights i:nth-child(3){background:#28c840}
+.term .bar .fname { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: 6px; }
+.term .out { padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; max-height: 380px; overflow: auto; white-space: pre-wrap; color: #b9c2e6; }
+.term .out .pass { color: var(--green); } .term .out .fail { color: var(--red); } .term .out .sec { color: var(--violet); } .term .out .sum { color: var(--teal); font-weight: 700; }
+.term .foot { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--border); background: rgba(255,255,255,.02); }
+.term .foot .stat { font-family: var(--mono); font-size: 13px; }
+.term .foot .stat b { color: var(--green); }
+.btn { appearance: none; cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; border: 1px solid var(--border-strong); color: var(--text); background: var(--panel-strong); border-radius: 10px; padding: 8px 15px; transition: all .16s ease; }
+.btn:hover { border-color: var(--teal); color: var(--teal); }
+.btn.primary { background: linear-gradient(180deg, #7cf0d3, var(--teal)); color: #04110d; border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.05); color: #04110d; }
+
+.status-line { font-family: var(--mono); font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.status-line b { color: var(--green); }
+hr.sep { border: 0; border-top: 1px solid var(--border); margin: 34px 0; }
+.foot { color: var(--muted2); font-size: 13px; text-align: center; margin-top: 40px; }
+.foot a { color: var(--muted); }
+.hint { font-size: 12.5px; color: var(--muted); }
+
+.helplist { font-family: var(--mono); font-size: 12.5px; border: 1px solid var(--border); border-radius: 10px; background: #0a0f1f; padding: 10px 12px; max-height: 190px; overflow: auto; }
+.helplist .cmd { color: var(--teal); }
+.helplist .dup { color: var(--red); text-decoration: underline; text-decoration-color: rgba(251,113,133,.5); }
+.count { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+.count.bad { color: var(--red); } .count.good { color: var(--green); }
+
+.fade { opacity: 0; transform: translateY(8px); animation: fade .6s ease forwards; }
+@keyframes fade { to { opacity: 1; transform: none; } }
+.d1{animation-delay:.05s}.d2{animation-delay:.12s}.d3{animation-delay:.19s}.d4{animation-delay:.26s}.d5{animation-delay:.33s}
+
+/* ============ animation / "it's actually running" styles ============ */
+.runrow { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.runrow .hint { color: var(--muted2); }
+.runbtn.loading::before { content:""; width:13px; height:13px; border:2px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; display:inline-block; margin-right:8px; vertical-align:-2px; animation:spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* big pin LED (showcase) */
+.led { display:inline-flex; align-items:center; gap:11px; padding:9px 15px; border:1px solid var(--border-strong); border-radius:999px; background:rgba(0,0,0,.32); }
+.led-dot { width:16px; height:16px; border-radius:50%; background:#1c2338; box-shadow:inset 0 0 6px rgba(0,0,0,.7); transition:all .18s ease; }
+.led-text { font-family:var(--mono); font-size:13px; color:var(--muted); }
+.led.lit .led-dot { background:var(--amber); box-shadow:0 0 16px 4px rgba(251,191,36,.75); }
+.led.lit .led-text { color:var(--amber); }
+.led.blink .led-dot { animation:ledblink .5s steps(1,end) infinite; }
+@keyframes ledblink { 0%,49%{ background:var(--amber); box-shadow:0 0 16px 4px rgba(251,191,36,.75);} 50%,100%{ background:#1c2338; box-shadow:inset 0 0 6px rgba(0,0,0,.7);} }
+
+/* mini LEDs (per-card) */
+.mled { display:inline-block; width:12px; height:12px; border-radius:50%; background:#1c2338; box-shadow:inset 0 0 5px rgba(0,0,0,.7); margin-right:8px; vertical-align:-1px; transition:all .18s ease; }
+.mled.on { background:var(--amber); box-shadow:0 0 12px 3px rgba(251,191,36,.7); }
+.mled.blink { animation:mledblink .5s steps(1,end) infinite; }
+@keyframes mledblink { 0%,49%{ background:var(--amber); box-shadow:0 0 12px 3px rgba(251,191,36,.7);} 50%,100%{ background:#1c2338; box-shadow:inset 0 0 5px rgba(0,0,0,.7);} }
+.col .headrow { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.col .headrow .tag { margin-bottom:0; }
+
+/* progress bar (#689) */
+.bar { height:12px; border-radius:7px; background:rgba(255,255,255,.06); border:1px solid var(--border); overflow:hidden; margin:6px 0 2px; }
+.bar-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--green),var(--teal)); transition:width .18s ease; }
+.bar-fill.over { background:linear-gradient(90deg,var(--amber),var(--red)); }
+.bar-scale { display:flex; justify-content:space-between; font-family:var(--mono); font-size:10.5px; color:var(--muted2); margin-top:3px; }
+
+/* bit bar (#688) */
+.bits { display:flex; gap:2px; margin:8px 0 4px; }
+.bit { flex:1; height:26px; border-radius:4px; border:1px solid var(--border); background:rgba(255,255,255,.03); display:grid; place-items:center; font-family:var(--mono); font-size:9px; color:var(--muted2); transition:all .15s ease; }
+.bit.op { color:var(--blue); }
+.bit.delay { color:var(--amber); }
+.bit.set { background:rgba(167,139,250,.5); border-color:var(--violet); color:#efe9ff; }
+.bit.spill { background:rgba(251,113,133,.55); border-color:var(--red); color:#fff; }
+
+/* shake + flash */
+.shake { animation:shake .4s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-5px)} 40%{transform:translateX(5px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+.flash { animation:flashin .5s ease; }
+@keyframes flashin { 0%{background:rgba(251,113,133,.35)} 100%{background:transparent} }
+.col .res.pulse { animation:flashin .5s ease; }
+
+
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+<!-- standalone.html — self-contained build of the PIO Workbench demo.
+     Generated by tools/build-standalone.js from demo/ (css + offline bundle + app.js).
+     Double-click to open; no web server required. -->
+<div class="topbar">
+  <div class="inner">
+    <div class="brand">
+      <div class="logo">◳</div>
+      <span>Kaluma&nbsp;<small>PIO Workbench</small></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="pill"><span class="dot"></span> running in-browser · real repo code</div>
+    <div class="seg" role="group" aria-label="Before/after">
+      <button class="before" id="btnBefore" aria-pressed="false">Bug (before)</button>
+      <button class="after" id="btnAfter" aria-pressed="true">Fixed (after)</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <span class="eyebrow fade d1">Personal fork · trusnock/kaluma · AI-assisted fixes</span>
+    <h1 class="fade d2">The 5 PIO bugs, fixed — and you can watch it happen.</h1>
+    <p class="lead fade d3">
+      kaluma-project/kaluma is a tiny JavaScript runtime for the Raspberry Pi&nbsp;Pico,
+      and a set of reported bugs in its <b>PIO</b> (Programmable&nbsp;I/O) support were
+      making it unusable. This page runs the <b>real fixed <code>rp2.js</code></b> from the repo
+      in your browser, drives it with a <b>faithful model of the pico-sdk PIO behavior</b>,
+      and shows each fix working <b>before → after</b> live. Flip the switch top-right.
+    </p>
+    <div class="meta fade d4">
+      <span class="chip">📄 real code from <b>src/modules/rp2/rp2.js</b></span>
+      <span class="chip">🧪 real tests from <b>tests/rp2.asm.test.js</b></span>
+      <span class="chip">🛠 fixes for <b>#686 #688 #689 #690 #691</b></span>
+    </div>
+    <div class="legend fade d5">
+      <span><i class="swatch" style="background:#a78bfa"></i> PIO instruction memory (32 slots)</span>
+      <span><i class="swatch" style="background:#2dd4bf"></i> program allocated here</span>
+      <span><i class="swatch" style="background:#fb7185"></i> fault / corruption</span>
+      <span class="hint">Model, not silicon — the exact behaviors these fixes target.</span>
+    </div>
+  </div>
+
+  <!-- SHOWCASE: #690/#691 PIO memory -->
+  <div class="section">
+    <h2>The headline fix — PIO instruction memory &amp; state machines</h2>
+    <p class="sub">Issues <b>#690</b> (SMs keep running after the program ends) and <b>#691</b>
+      (program not cleared between runs → the program offset drifts down to <i>negative</i>, and the
+      part is unrecoverable without <code>flash_nuke</code>). The root cause is a C static in
+      pico-sdk (<code>_used_instruction_space</code>) that only <code>pio_clear_instruction_memory()</code>
+      resets — kaluma never called it after boot. The fix adds <code>km_pio_cleanup()</code> that runs
+      on every program end.</p>
+
+    <div class="card">
+      <div class="head">
+        <span class="badge">#690/#691</span>
+        <div>
+          <h3 id="pioCardTitle">After the fix — stable program offset across runs</h3>
+          <div class="desc" id="pioCardDesc">Each run clears PIO memory + stops SMs, so the allocator always starts clean.</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="hero-grid">
+          <div class="mem">
+            <div class="mtitle"><span>pio 0 · instruction memory</span><span id="memUsed">used: 0/32</span></div>
+            <div class="cells" id="memCells"></div>
+            <div class="runrow" style="margin-top:12px">
+              <div class="led" id="pinLed"><span class="led-dot"></span><span class="led-text" id="pinLedText">pin 0 · idle</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="trace" id="offsetTrace"></div>
+            <div style="margin:16px 0 6px; color:var(--muted); font-size:13px;">State machine after program end:</div>
+            <div class="smrow" id="smRow" style="grid-template-columns:repeat(4,1fr)"></div>
+            <div class="status-line" id="pioStatus"></div>
+          </div>
+        </div>
+        <div class="runrow">
+          <button class="btn primary runbtn" id="btnRun">▶ Run the program</button>
+          <button class="btn runbtn" id="btnStop">■ Stop</button>
+          <button class="btn runbtn" id="btnStep" title="advance one .load run">⏭ Step .load</button>
+          <span class="hint">Runs one .load → execute (SM0 blinks) → end, so you can <b>watch</b> it.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sep" />
+
+  <!-- THE OTHER FIXES -->
+  <div class="section">
+    <h2>The other four fixes</h2>
+    <p class="sub">Each one runs the real repo code (where it's JS) against the same model. Toggle Bug/Fixed above.</p>
+
+    <div class="grid2">
+
+      <!-- #688 -->
+      <div class="card">
+        <div class="head"><span class="badge">#688</span><div><h3>delay() bounds checking</h3><div class="desc">An out-of-range delay silently corrupted the instruction/sideset bits.</div></div></div>
+        <div class="body">
+          <div class="code">asm.set("pins", 1).delay(<span class="n">200</span>)</div>
+          <div class="bits" id="d688bits"></div>
+          <div class="hint" style="margin:2px 0 10px">16-bit instruction: opcode (bits 15–12) · sideset (13) · <b>delay (12–8, 5 bits)</b> · dest/set</div>
+          <div class="ba">
+            <div class="col before">
+              <span class="tag">Before</span>
+              <div class="res err" id="d688before"></div>
+              <div class="note" id="d688beforeNote"></div>
+            </div>
+            <div class="col after">
+              <span class="tag">Fixed</span>
+              <div class="res" id="d688after"></div>
+              <div class="note" id="d688afterNote"></div>
+            </div>
+          </div>
+          <div class="runrow"><button class="btn runbtn" id="btn688">▶ Run delay(200)</button></div>
+        </div>
+      </div>
+
+      <!-- #689 -->
+      <div class="card">
+        <div class="head"><span class="badge">#689</span><div><h3>program size limit</h3><div class="desc">No cap → over-long programs failed to load unpredictably.</div></div></div>
+        <div class="body">
+          <div class="code">for (let i = 0; i &lt; <span class="n">33</span>; i++) asm.nop()</div>
+          <div class="bar"><div class="bar-fill" id="d689bar"></div></div>
+          <div class="bar-scale"><span>0</span><span>32 (limit)</span><span>33</span></div>
+          <div class="ba">
+            <div class="col before">
+              <span class="tag">Before</span>
+              <div class="res err" id="d689before"></div>
+              <div class="note" id="d689beforeNote"></div>
+            </div>
+            <div class="col after">
+              <span class="tag">Fixed</span>
+              <div class="res" id="d689after"></div>
+              <div class="note" id="d689afterNote"></div>
+            </div>
+          </div>
+          <div class="runrow"><button class="btn runbtn" id="btn689">▶ Build 33 instructions</button></div>
+        </div>
+      </div>
+
+      <!-- #686 -->
+      <div class="card">
+        <div class="head"><span class="badge">#686</span><div><h3>.help command duplication</h3><div class="desc">The 6 fs commands re-registered on every .load/.flash piled up in .help.</div></div></div>
+        <div class="body">
+          <div class="hint">Simulating the command registry across 4 <code>.load</code> cycles:</div>
+          <div class="ba" style="margin-top:10px">
+            <div class="col before">
+              <span class="tag">Before · <span class="count bad" id="d686beforeCount">…</span> lines</span>
+              <div class="helplist" id="d686before"></div>
+            </div>
+            <div class="col after">
+              <span class="tag">Fixed · <span class="count good" id="d686afterCount">…</span> lines</span>
+              <div class="helplist" id="d686after"></div>
+            </div>
+          </div>
+          <div class="note" id="d686note"></div>
+          <div class="runrow"><button class="btn runbtn" id="btn686">▶ Replay 4 boots</button></div>
+        </div>
+      </div>
+
+      <!-- #690 SM -->
+      <div class="card">
+        <div class="head"><span class="badge">#690</span><div><h3>state machines keep running</h3><div class="desc">SMs left enabled after the program ended, re-running stale instructions.</div></div></div>
+        <div class="body">
+          <div class="ba">
+            <div class="col before">
+              <div class="headrow"><span class="tag">Before · after program end</span><span class="mled" id="d690ledBefore"></span></div>
+              <div class="res err" id="d690before"></div>
+              <div class="note" id="d690beforeNote"></div>
+            </div>
+            <div class="col after">
+              <div class="headrow"><span class="tag">Fixed · after program end</span><span class="mled" id="d690ledAfter"></span></div>
+              <div class="res ok" id="d690after"></div>
+              <div class="note" id="d690afterNote"></div>
+            </div>
+          </div>
+          <div class="code" style="margin-top:12px">
+// targets/rp2/src/system.c
+void km_pio_cleanup() {
+  for (int pio=0; pio&lt;2; pio++) {
+    for (int sm=0; sm&lt;4; sm++) {
+      pio_sm_set_enabled(pio, sm, false);
+      pio_sm_unclaim(pio, sm);
+    }
+    pio_clear_instruction_memory(pio);
+  }
+}</div>
+          <div class="runrow"><button class="btn runbtn" id="btn690">▶ End program, watch cleanup</button></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="sep" />
+
+  <!-- TEST TERMINAL -->
+  <div class="section">
+    <h2>The real test suite, run in your browser</h2>
+    <p class="sub">This loads the actual <code>tests/rp2.asm.test.js</code> (25 assertions) and runs it against the
+      real <code>rp2.js</code>, with the same native-binding stub the project ships. The output below is live.</p>
+    <div class="term">
+      <div class="bar">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <span class="fname">tests/rp2.asm.test.js — node tests/rp2.asm.test.js</span>
+      </div>
+      <div class="out" id="termOut">Loading real test file…</div>
+      <div class="foot">
+        <span class="stat" id="termStat">—</span>
+        <span style="flex:1"></span>
+        <button class="btn primary" id="btnRunTests">↻ Run tests</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <p>Personal, non-authoritative fork of <a href="https://github.com/kaluma-project/kaluma">kaluma-project/kaluma</a> (Apache-2.0).
+       Original code by Changjae (Jay) Kim &amp; the Kaluma contributors — no credit taken here.
+       Fixes are AI-assisted (OpenHands) at the owner's direction.</p>
+    <p style="margin-top:6px">
+      <a href="https://github.com/trusnock/kaluma">trusnock/kaluma</a> ·
+      <a href="https://github.com/trusnock/kaluma/blob/master/CONTRIBUTING.md">CONTRIBUTING</a> ·
+      <a href="https://github.com/trusnock/kaluma/blob/master/docs/ai-assisted-fixes.md">how it was done</a> ·
+      <span class="hint">C fixes are build-verified, not hardware-tested (no Pico available).</span>
+    </p>
+  </div>
+
+</div>
+
+<script>
+// AUTO-GENERATED fallback bundle (base64) of the two REAL repo files,
+// so the demo works from any serving root / even as a local file.
+// app.js prefers the LIVE files (fetched relative to repo root) and only
+// falls back to these if the fetch fails. Regenerate if those files change.
+self.__KALUMA_DEMO_BUNDLE__ = {
+  rp2:  "Y29uc3QgcnAyX25hdGl2ZSA9IHByb2Nlc3MuYmluZGluZyhwcm9jZXNzLmJpbmRpbmcucnAyKTsKCmNvbnN0IFRFTVBFUkFUVVJFX0FEQyA9IDMwOwoKY29uc3QgUElPID0gewogIEZJRk9fSk9JTl9OT05FOiAwLAogIEZJRk9fSk9JTl9UWDogMSwKICBGSUZPX0pPSU5fUlg6IDIsCiAgU0hJRlRfTEVGVDogMCwKICBTSElGVF9SSUdIVDogMSwKICBUWF9MRVNTVEhBTjogMCwKICBSWF9MRVNTVEhBTjogMSwKfTsKCmNsYXNzIEFTTSB7CiAgY29uc3RydWN0b3Iob3B0aW9ucykgewogICAgdGhpcy5jb2RlID0gW107CiAgICB0aGlzLmxhYmVscyA9IHt9OwogICAgdGhpcy5qbXBzID0gW107CiAgICBvcHRpb25zID0gT2JqZWN0LmFzc2lnbigKICAgICAgewogICAgICAgIHNpZGVzZXQ6IDAsCiAgICAgICAgc2lkZXNldE9wdDogZmFsc2UsCiAgICAgICAgc2lkZXNldFBpbmRpcnM6IGZhbHNlLAogICAgICB9LAogICAgICBvcHRpb25zCiAgICApOwogICAgdGhpcy5zaWRlc2V0ID0gb3B0aW9ucy5zaWRlc2V0OwogICAgdGhpcy5zaWRlc2V0T3B0ID0gb3B0aW9ucy5zaWRlc2V0T3B0OwogICAgdGhpcy5zaWRlc2V0UGluZGlycyA9IG9wdGlvbnMuc2lkZXNldFBpbmRpcnM7CiAgICBpZiAob3B0aW9ucy5zaWRlc2V0UGluZGlycyAmJiBvcHRpb25zLnNpZGVzZXQgPD0gMCkgewogICAgICB0aHJvdyBuZXcgUmFuZ2VFcnJvcigKICAgICAgICAic2lkZXNldFBpbmRpcnMgcmVxdWlyZXMgc2lkZXNldCA+PSAxIgogICAgICApOwogICAgfQogICAgaWYgKG9wdGlvbnMuc2lkZXNldE9wdCAmJiBvcHRpb25zLnNpZGVzZXQgPD0gMCkgewogICAgICB0aHJvdyBuZXcgUmFuZ2VFcnJvcigKICAgICAgICAic2lkZXNldE9wdCByZXF1aXJlcyBzaWRlc2V0ID49IDEiCiAgICAgICk7CiAgICB9CiAgfQoKICAvLyBNYXhpbXVtIFBJTyBwcm9ncmFtIHNpemUgaXMgMzIgaW5zdHJ1Y3Rpb25zICg1LWJpdCBpbnN0cnVjdGlvbiBvZmZzZXQpLgogIHN0YXRpYyBNQVhfUFJPR1JBTV9TSVpFID0gMzI7CgogIC8vIEFwcGVuZCBvbmUgMTYtYml0IGluc3RydWN0aW9uLCBlbmZvcmNpbmcgdGhlIDMyLWluc3RydWN0aW9uIGxpbWl0IChpc3N1ZSAjNjg5KS4KICAvLyBDaGVjayBiZWZvcmUgcHVzaGluZyBzbyBgdGhpcy5jb2RlYCBuZXZlciBleGNlZWRzIHRoZSBsaW1pdCBldmVuIGlmIHRoZQogIC8vIGNhbGxlciBjYXRjaGVzIHRoZSB0aHJvd24gZXJyb3IuCiAgX2FkZChjKSB7CiAgICBpZiAodGhpcy5jb2RlLmxlbmd0aCA+PSBBU00uTUFYX1BST0dSQU1fU0laRSkgewogICAgICB0aHJvdyBuZXcgRXJyb3IoIlByb2dyYW0gdG9vIGxvbmchIik7CiAgICB9CiAgICB0aGlzLmNvZGUucHVzaChjKTsKICAgIHJldHVybiB0aGlzOwogIH0KCiAgam1wKGNvbmQsIHRhcmdldCkgewogICAgbGV0IGMgPSBBU00uSk1QOwogICAgaWYgKGFyZ3VtZW50cy5sZW5ndGggPCAyKSB7CiAgICAgIHRhcmdldCA9IGNvbmQ7CiAgICAgIGNvbmQgPSBudWxsOwogICAgfQogICAgc3dpdGNoIChjb25kKSB7CiAgICAgIGNhc2UgbnVsbDoKICAgICAgICBicmVhazsKICAgICAgY2FzZSAiIjoKICAgICAgICBicmVhazsKICAgICAgY2FzZSAiIXgiOgogICAgICAgIGMgfD0gMSA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJ4LS0iOgogICAgICAgIGMgfD0gMiA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICIheSI6CiAgICAgICAgYyB8PSAzIDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgInktLSI6CiAgICAgICAgYyB8PSA0IDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgInghPXkiOgogICAgICAgIGMgfD0gNSA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJwaW4iOgogICAgICAgIGMgfD0gNiA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICIhb3NyZSI6CiAgICAgICAgYyB8PSA3IDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGRlZmF1bHQ6CiAgICAgICAgdGhyb3cgbmV3IEVycm9yKCJVbmtub3duIGNvbmRpdGlvbiBvZiBqbXAoKSIpOwogICAgfQogICAgdGhpcy5qbXBzLnB1c2goewogICAgICBvZmZzZXQ6IHRoaXMuY29kZS5sZW5ndGgsCiAgICAgIHRhcmdldDogdGFyZ2V0LAogICAgfSk7CiAgICByZXR1cm4gdGhpcy5fYWRkKGMpOwogIH0KCiAgd2FpdChwb2wsIHNyYywgaWR4LCByZWwpIHsKICAgIGxldCBjID0gQVNNLldBSVQ7CiAgICBpZiAocG9sKSBjIHw9IDEgPDwgNzsKICAgIHN3aXRjaCAoc3JjKSB7CiAgICAgIGNhc2UgImdwaW8iOgogICAgICAgIGMgfD0gMCA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJwaW4iOgogICAgICAgIGMgfD0gMSA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJpcnEiOgogICAgICAgIGMgfD0gMiA8PCA1OwogICAgICAgIGlmIChyZWwgPT09ICJyZWwiKSB7CiAgICAgICAgICBjIHw9IDEgPDwgNDsKICAgICAgICB9CiAgICAgICAgYnJlYWs7CiAgICAgIC8vIGNhc2UgcmVzZXJ2ZWQ6IGMgfD0gMyA8PCA1OyBicmVhazsKICAgICAgZGVmYXVsdDoKICAgICAgICB0aHJvdyBuZXcgRXJyb3IoIlVua25vd24gc291cmNlIG9mIHdhaXQoKSIpOwogICAgfQogICAgYyB8PSBpZHg7CiAgICByZXR1cm4gdGhpcy5fYWRkKGMpOwogIH0KCiAgaW4oc3JjLCBiaXRzKSB7CiAgICBsZXQgYyA9IEFTTS5JTjsKICAgIHN3aXRjaCAoc3JjKSB7CiAgICAgIGNhc2UgInBpbnMiOgogICAgICAgIGMgfD0gMCA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJ4IjoKICAgICAgICBjIHw9IDEgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAieSI6CiAgICAgICAgYyB8PSAyIDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgIm51bGwiOgogICAgICAgIGMgfD0gMyA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICAvLyByZXNlcnZlZDogYyB8PSA0IDw8IDU7IGJyZWFrOwogICAgICAvLyByZXNlcnZlZDogYyB8PSA1IDw8IDU7IGJyZWFrOwogICAgICBjYXNlICJpc3IiOgogICAgICAgIGMgfD0gNiA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJvc3IiOgogICAgICAgIGMgfD0gNyA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBkZWZhdWx0OgogICAgICAgIHRocm93IG5ldyBFcnJvcigiVW5rbm93biBzb3VyY2Ugb2YgaW4oKSIpOwogICAgfQogICAgaWYgKGJpdHMgPj0gMzIpIHsKICAgICAgYml0cyA9IDA7CiAgICB9CiAgICBjIHw9IGJpdHM7CiAgICByZXR1cm4gdGhpcy5fYWRkKGMpOwogIH0KCiAgb3V0KGRzdCwgYml0cykgewogICAgbGV0IGMgPSBBU00uT1VUOwogICAgc3dpdGNoIChkc3QpIHsKICAgICAgY2FzZSAicGlucyI6CiAgICAgICAgYyB8PSAwOwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJ4IjoKICAgICAgICBjIHw9IDEgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAieSI6CiAgICAgICAgYyB8PSAyIDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgIm51bGwiOgogICAgICAgIGMgfD0gMyA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJwaW5kaXJzIjoKICAgICAgICBjIHw9IDQgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAicGMiOgogICAgICAgIGMgfD0gNSA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJpc3IiOgogICAgICAgIGMgfD0gNiA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJleGVjIjoKICAgICAgICBjIHw9IDcgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgZGVmYXVsdDoKICAgICAgICB0aHJvdyBuZXcgRXJyb3IoIlVua25vd24gZGVzdGluYXRpb24gb2Ygb3V0KCkiKTsKICAgIH0KICAgIGlmIChiaXRzID49IDMyKSB7CiAgICAgIGJpdHMgPSAwOwogICAgfQogICAgYyB8PSBiaXRzOwogICAgcmV0dXJuIHRoaXMuX2FkZChjKTsKICB9CgogIHB1c2goaWZmdWxsLCBibG9jayA9IDEpIHsKICAgIGxldCBjID0gQVNNLlBVU0g7CiAgICBpZiAoaWZmdWxsID09PSAxIHx8IGlmZnVsbCA9PT0gImlmZnVsbCIpIGMgfD0gMHgwMDQwOwogICAgaWYgKGJsb2NrID09PSAxIHx8IGJsb2NrID09PSAiYmxvY2siKSBjIHw9IDB4MDAyMDsKICAgIHJldHVybiB0aGlzLl9hZGQoYyk7CiAgfQoKICBwdWxsKGlmZW1wdHksIGJsb2NrID0gMSkgewogICAgbGV0IGMgPSBBU00uUFVMTDsKICAgIGlmIChpZmVtcHR5ID09PSAxIHx8IGlmZW1wdHkgPT09ICJpZmVtcHR5IikgYyB8PSAweDAwNDA7CiAgICBpZiAoYmxvY2sgPT09IDEgfHwgYmxvY2sgPT09ICJibG9jayIpIGMgfD0gMHgwMDIwOwogICAgcmV0dXJuIHRoaXMuX2FkZChjKTsKICB9CgogIG1vdihkc3QsIHNyYykgewogICAgbGV0IGMgPSBBU00uTU9WOwogICAgc3dpdGNoIChkc3QpIHsKICAgICAgY2FzZSAicGlucyI6CiAgICAgICAgYyB8PSAwIDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgIngiOgogICAgICAgIGMgfD0gMSA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJ5IjoKICAgICAgICBjIHw9IDIgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgLy8gcmVzZXJ2ZWQ6IGMgfD0gMyA8PCA1OyBicmVhazsKICAgICAgY2FzZSAiZXhlYyI6CiAgICAgICAgYyB8PSA0IDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgInBjIjoKICAgICAgICBjIHw9IDUgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAiaXNyIjoKICAgICAgICBjIHw9IDYgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAib3NyIjoKICAgICAgICBjIHw9IDcgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgZGVmYXVsdDoKICAgICAgICB0aHJvdyBuZXcgRXJyb3IoIlVua25vd24gZGVzdGluYXRpb24gb2YgbW92KCkiKTsKICAgIH0KICAgIC8vIG9wZXJhdGlvbgogICAgaWYgKHNyYy5zdGFydHNXaXRoKCJ+IikgfHwgc3JjLnN0YXJ0c1dpdGgoIiEiKSkgewogICAgICAvLyBpbnZlcnQKICAgICAgYyB8PSAxIDw8IDM7CiAgICAgIHNyYyA9IHNyYy5zdWJzdHIoMSk7CiAgICB9CiAgICBpZiAoc3JjLnN0YXJ0c1dpdGgoIjo6IikpIHsKICAgICAgLy8gYml0LXJldmVyc2UKICAgICAgYyB8PSAyIDw8IDM7CiAgICAgIHNyYyA9IHNyYy5zdWJzdHIoMik7CiAgICB9CiAgICBzd2l0Y2ggKHNyYykgewogICAgICBjYXNlICJwaW5zIjoKICAgICAgICBjIHw9IDA7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgIngiOgogICAgICAgIGMgfD0gMTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAieSI6CiAgICAgICAgYyB8PSAyOwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJudWxsIjoKICAgICAgICBjIHw9IDM7CiAgICAgIC8vIHJlc2VydmVkOiBjIHw9IDQ7CiAgICAgIGNhc2UgInN0YXR1cyI6CiAgICAgICAgYyB8PSA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJpc3IiOgogICAgICAgIGMgfD0gNjsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAib3NyIjoKICAgICAgICBjIHw9IDc7CiAgICAgICAgYnJlYWs7CiAgICAgIGRlZmF1bHQ6CiAgICAgICAgdGhyb3cgbmV3IEVycm9yKCJVbmtub3duIHNvdXJjZSBvZiBtb3YoKSIpOwogICAgfQogICAgcmV0dXJuIHRoaXMuX2FkZChjKTsKICB9CgogIGlycShjbWQsIGlycW51bSwgcmVsKSB7CiAgICBsZXQgYyA9IEFTTS5JUlE7CiAgICBsZXQgd2FpdCA9IDA7CiAgICBsZXQgY2xlYXIgPSAwOwogICAgaWYgKHR5cGVvZiBjbWQgPT09ICJudW1iZXIiKSB7CiAgICAgIHJlbCA9IGlycW51bTsKICAgICAgaXJxbnVtID0gY21kOwogICAgICBjbWQgPSBudWxsOwogICAgfQogICAgc3dpdGNoIChjbWQpIHsKICAgICAgY2FzZSBudWxsOgogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJzZXQiOgogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJub3dhaXQiOgogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJ3YWl0IjoKICAgICAgICB3YWl0ID0gMTsKICAgICAgICBicmVhazsKICAgICAgY2FzZSAiY2xlYXIiOgogICAgICAgIGNsZWFyID0gMTsKICAgICAgICBicmVhazsKICAgIH0KICAgIGlmICh3YWl0KSBjIHw9IDEgPDwgNTsKICAgIGlmIChjbGVhcikgYyB8PSAxIDw8IDY7CiAgICBjIHw9IGlycW51bTsKICAgIGlmIChyZWwgPT09ICJyZWwiKSB7CiAgICAgIGMgfD0gMSA8PCA0OwogICAgfQogICAgcmV0dXJuIHRoaXMuX2FkZChjKTsKICB9CgogIHNldChkc3QsIHZhbCkgewogICAgbGV0IGMgPSBBU00uU0VUOwogICAgc3dpdGNoIChkc3QpIHsKICAgICAgY2FzZSAicGlucyI6CiAgICAgICAgYyB8PSAwIDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIGNhc2UgIngiOgogICAgICAgIGMgfD0gMSA8PCA1OwogICAgICAgIGJyZWFrOwogICAgICBjYXNlICJ5IjoKICAgICAgICBjIHw9IDIgPDwgNTsKICAgICAgICBicmVhazsKICAgICAgLy8gcmVzZXJ2ZWQ6IGMgfD0gMyA8PCA1OyBicmVhazsKICAgICAgY2FzZSAicGluZGlycyI6CiAgICAgICAgYyB8PSA0IDw8IDU7CiAgICAgICAgYnJlYWs7CiAgICAgIC8vIHJlc2VydmVkOiBjIHw9IDUgPDwgNTsgYnJlYWs7CiAgICAgIC8vIHJlc2VydmVkOiBjIHw9IDYgPDwgNTsgYnJlYWs7CiAgICAgIC8vIHJlc2VydmVkOiBjIHw9IDcgPDwgNTsgYnJlYWs7CiAgICAgIGRlZmF1bHQ6CiAgICAgICAgdGhyb3cgbmV3IEVycm9yKCJVbmtub3duIGRlc3RpbmF0aW9uIG9mIHNldCgpIik7CiAgICB9CiAgICBjIHw9IHZhbDsKICAgIHJldHVybiB0aGlzLl9hZGQoYyk7CiAgfQoKICBub3AoKSB7CiAgICByZXR1cm4gdGhpcy5tb3YoInkiLCAieSIpOwogIH0KCiAgLy8gYWRkaXRpb25hbAogIGxhYmVsKG5hbWUpIHsKICAgIHRoaXMubGFiZWxzW25hbWVdID0gdGhpcy5jb2RlLmxlbmd0aDsKICAgIHJldHVybiB0aGlzOwogIH0KCiAgd3JhcF90YXJnZXQoKSB7CiAgICByZXR1cm4gdGhpcy5sYWJlbCgid3JhcF90YXJnZXQiKTsKICB9CgogIHdyYXAoKSB7CiAgICB0aGlzLmxhYmVsc1sid3JhcCJdID0gdGhpcy5jb2RlLmxlbmd0aCAtIDE7CiAgICByZXR1cm4gdGhpczsKICB9CgogIHNpZGUodmFsKSB7CiAgICBjb25zdCBpID0gdGhpcy5jb2RlLmxlbmd0aCAtIDE7CiAgICBsZXQgYyA9IHRoaXMuY29kZVtpXTsKICAgIGlmICh0aGlzLnNpZGVzZXRPcHQgPT09IHRydWUpIHsKICAgICAgYyB8PSAoMSA8PCAxMikgfCAodmFsIDw8ICgxMyAtIHRoaXMuc2lkZXNldCAtIDEpKTsKICAgIH0gZWxzZSB7CiAgICAgIGMgfD0gdmFsIDw8ICgxMyAtIHRoaXMuc2lkZXNldCk7CiAgICB9CiAgICBpZiAodGhpcy5zaWRlc2V0T3B0ID09PSB0cnVlKSBjIHw9IDEgPDwgMTI7CiAgICB0aGlzLmNvZGVbaV0gPSBjOwogICAgcmV0dXJuIHRoaXM7CiAgfQoKICBkZWxheSh2YWwpIHsKICAgIC8vIFRoZSBkZWxheSBmaWVsZCBpcyA1IGJpdHMgKGJpdHMgOC0xMikuIFZhbHVlcyBhYm92ZSAzMSAob3Igd2l0aCB0aGUgaGlnaAogICAgLy8gYml0cyBzZXQgd2hlbiBzaWRlc2V0IG9jY3VwaWVzIHRoZSBzYW1lIGZpZWxkKSBzaWxlbnRseSBjb3JydXB0IHRoZQogICAgLy8gaW5zdHJ1Y3Rpb24gYW5kL29yIHNpZGVzZXQgYml0cywgc28gcmVqZWN0IHRoZW0gKGlzc3VlICM2ODgpLgogICAgaWYgKAogICAgICB0eXBlb2YgdmFsICE9PSAibnVtYmVyIiB8fAogICAgICAhTnVtYmVyLmlzSW50ZWdlcih2YWwpIHx8CiAgICAgIHZhbCA8IDAgfHwKICAgICAgdmFsID4gMHgxZgogICAgKSB7CiAgICAgIHRocm93IG5ldyBSYW5nZUVycm9yKAogICAgICAgIGBkZWxheSB2YWx1ZSBtdXN0IGJlIGFuIGludGVnZXIgaW4gdGhlIHJhbmdlIDAtMzEgKGdvdCAke3ZhbH0pYAogICAgICApOwogICAgfQogICAgY29uc3QgaSA9IHRoaXMuY29kZS5sZW5ndGggLSAxOwogICAgbGV0IGMgPSB0aGlzLmNvZGVbaV07CiAgICBjIHw9IHZhbCA8PCA4OwogICAgdGhpcy5jb2RlW2ldID0gYzsKICAgIHJldHVybiB0aGlzOwogIH0KCiAgX3VwZGF0ZUptcHMoKSB7CiAgICB0aGlzLmptcHMuZm9yRWFjaCgoam1wKSA9PiB7CiAgICAgIGxldCBjID0gdGhpcy5jb2RlW2ptcC5vZmZzZXRdOwogICAgICBjIHw9IHRoaXMubGFiZWxzW2ptcC50YXJnZXRdOwogICAgICB0aGlzLmNvZGVbam1wLm9mZnNldF0gPSBjOwogICAgfSk7CiAgICB0aGlzLmptcHMgPSBbXTsKICB9CgogIHRvQmluYXJ5KCkgewogICAgdGhpcy5fdXBkYXRlSm1wcygpOwogICAgcmV0dXJuIG5ldyBVaW50MTZBcnJheSh0aGlzLmNvZGUpOwogIH0KCiAgdG9JbnN0KGlkeCA9IDApIHsKICAgIHJldHVybiB0aGlzLnRvQmluYXJ5KClbaWR4XTsKICB9CgogIC8vIGluc3RydWN0aW9uCiAgc3RhdGljIEpNUCA9IDB4MDAwMDsKICBzdGF0aWMgV0FJVCA9IDB4MjAwMDsKICBzdGF0aWMgSU4gPSAweDQwMDA7CiAgc3RhdGljIE9VVCA9IDB4NjAwMDsKICBzdGF0aWMgUFVTSCA9IDB4ODAwMDsKICBzdGF0aWMgUFVMTCA9IDB4ODA4MDsKICBzdGF0aWMgTU9WID0gMHhhMDAwOwogIHN0YXRpYyBJUlEgPSAweGMwMDA7CiAgc3RhdGljIFNFVCA9IDB4ZTAwMDsKfQoKY2xhc3MgU3RhdGVNYWNoaW5lIHsKICBzdGF0aWMgaWRzID0gWzAsIDQsIDEsIDUsIDIsIDYsIDMsIDddCiAgc3RhdGljIGdldEF2YWlsYWJsZUlkKCkgewogICAgcmV0dXJuIFN0YXRlTWFjaGluZS5pZHMubGVuZ3RoID4gMCA/IFN0YXRlTWFjaGluZS5pZHNbMF0gOiBudWxsOwogIH0KICBjb25zdHJ1Y3RvcihpZCwgYXNtLCBvcHRpb25zKSB7CiAgICBTdGF0ZU1hY2hpbmUuaWRzLnNwbGljZShTdGF0ZU1hY2hpbmUuaWRzLmluZGV4T2YoaWQpLCAxKTsKICAgIHRoaXMucGlvID0gaWQgPiAzID8gMSA6IDA7CiAgICB0aGlzLnNtID0gaWQgLSB0aGlzLnBpbyAqIDQ7CiAgICBpZiAoIWFzbS5fcGlvKSBhc20uX3BpbyA9IG5ldyBBcnJheSgyKTsKICAgIGlmICghYXNtLl9waW9bdGhpcy5waW9dKSB7CiAgICAgIGNvbnN0IGJpbiA9IGFzbS50b0JpbmFyeSgpOwogICAgICB0aGlzLm9mZnNldCA9IHJwMl9uYXRpdmUucGlvX2FkZF9wcm9ncmFtKHRoaXMucGlvLCBiaW4pOwogICAgICB0aGlzLmxlbmd0aCA9IGJpbi5sZW5ndGg7CiAgICAgIGFzbS5fcGlvW3RoaXMucGlvXSA9IHsKICAgICAgICBvZmZzZXQ6IHRoaXMub2Zmc2V0LAogICAgICB9OwogICAgfQogICAgcnAyX25hdGl2ZS5waW9fc21faW5pdCgKICAgICAgdGhpcy5waW8sCiAgICAgIHRoaXMuc20sCiAgICAgIE9iamVjdC5hc3NpZ24oCiAgICAgICAgewogICAgICAgICAgZnJlcTogMTI1MDAwMDAwLAogICAgICAgICAgaW5CYXNlOiAtMSwKICAgICAgICAgIGluQ291bnQ6IDEsCiAgICAgICAgICBvdXRCYXNlOiAtMSwKICAgICAgICAgIG91dENvdW50OiAxLAogICAgICAgICAgc2V0QmFzZTogLTEsCiAgICAgICAgICBzZXRDb3VudDogMSwKICAgICAgICAgIHNpZGVzZXRCYXNlOiAtMSwKICAgICAgICAgIHNpZGVzZXQ6IGFzbS5zaWRlc2V0ID4gMCwgLy8gZm9yIGludGVybmFsCiAgICAgICAgICBzaWRlc2V0Qml0czogYXNtLnNpZGVzZXQsIC8vIGZvciBpbnRlcm5hbAogICAgICAgICAgc2lkZXNldE9wdDogYXNtLnNpZGVzZXRPcHQsIC8vIGZvciBpbnRlcm5hbAogICAgICAgICAgc2lkZXNldFBpbmRpcnM6IGFzbS5zaWRlc2V0UGluZGlycywgLy8gZm9yIGludGVybmFsCiAgICAgICAgICBqbXBQaW46IC0xLAogICAgICAgICAgb2Zmc2V0OiB0aGlzLm9mZnNldCwgLy8gZm9yIGludGVybmFsCiAgICAgICAgICB3cmFwVGFyZ2V0OiBhc20ubGFiZWxzWyJ3cmFwX3RhcmdldCJdID8/IDAsIC8vIGZvciBpbnRlcm5hbAogICAgICAgICAgd3JhcDogYXNtLmxhYmVsc1sid3JhcCJdID8/IGFzbS5jb2RlLmxlbmd0aCAtIDEsIC8vIGZvciBpbnRlcm5hbAogICAgICAgICAgaW5TaGlmdERpcjogUElPLlNISUZUX1JJR0hULAogICAgICAgICAgYXV0b3B1c2g6IGZhbHNlLAogICAgICAgICAgcHVzaFRocmVzaG9sZDogMzIsCiAgICAgICAgICBvdXRTaGlmdERpcjogUElPLlNISUZUX1JJR0hULAogICAgICAgICAgYXV0b3B1bGw6IGZhbHNlLAogICAgICAgICAgcHVsbFRocmVzaG9sZDogMzIsCiAgICAgICAgICBmaWZvSm9pbjogUElPLkZJRk9fSk9JTl9OT05FLAogICAgICAgICAgb3V0U3RpY2t5OiBmYWxzZSwKICAgICAgICAgIG91dEVuYWJsZVBpbjogLTEsCiAgICAgICAgICBtb3ZTdGF0dXNTZWw6IFBJTy5UWF9MRVNTVEhBTiwKICAgICAgICAgIG1vdlN0YXR1c046IDAsCiAgICAgICAgfSwKICAgICAgICBvcHRpb25zCiAgICAgICkKICAgICk7CiAgfQoKICBhY3RpdmUodmFsdWUpIHsKICAgIHJwMl9uYXRpdmUucGlvX3NtX3NldF9lbmFibGVkKHRoaXMucGlvLCB0aGlzLnNtLCB2YWx1ZSk7CiAgfQoKICByZXN0YXJ0KCkgewogICAgcnAyX25hdGl2ZS5waW9fc21fcmVzdGFydCh0aGlzLnBpbywgdGhpcy5zbSk7CiAgfQoKICBleGVjKGluc3QpIHsKICAgIHJwMl9uYXRpdmUucGlvX3NtX2V4ZWModGhpcy5waW8sIHRoaXMuc20sIGluc3QpOwogIH0KCiAgZ2V0KCkgewogICAgcmV0dXJuIHJwMl9uYXRpdmUucGlvX3NtX2dldCh0aGlzLnBpbywgdGhpcy5zbSk7CiAgfQoKICBwdXQodmFsdWUpIHsKICAgIHJwMl9uYXRpdmUucGlvX3NtX3B1dCh0aGlzLnBpbywgdGhpcy5zbSwgdmFsdWUpOwogIH0KCiAgc2V0UGlucyh2YWx1ZSwgbWFzaykgewogICAgaWYgKG1hc2sgPT0gdW5kZWZpbmVkKSB7CiAgICAgIG1hc2sgPSAweEZGRkZGRkZGOwogICAgfQogICAgcnAyX25hdGl2ZS5waW9fc21fc2V0X3BpbnModGhpcy5waW8sIHRoaXMuc20sIHZhbHVlLCBtYXNrKTsKICB9CgogIHJ4ZmlmbygpIHsKICAgIHJldHVybiBycDJfbmF0aXZlLnBpb19zbV9yeGZpZm8odGhpcy5waW8sIHRoaXMuc20pOwogIH0KCiAgdHhmaWZvKCkgewogICAgcmV0dXJuIHJwMl9uYXRpdmUucGlvX3NtX3R4Zmlmbyh0aGlzLnBpbywgdGhpcy5zbSk7CiAgfQoKICBjbGVhckZJRk9zKCkgewogICAgcmV0dXJuIHJwMl9uYXRpdmUucGlvX3NtX2NsZWFyX2ZpZm9zKHRoaXMucGlvLCB0aGlzLnNtKTsKICB9CgogIGRyYWluVFhGSUZPKCkgewogICAgcmV0dXJuIHJwMl9uYXRpdmUucGlvX3NtX2RyYWluX3R4Zmlmbyh0aGlzLnBpbywgdGhpcy5zbSk7CiAgfQoKICBpcnEoaGFuZGxlcikgewogICAgcmV0dXJuIHJwMl9uYXRpdmUucGlvX3NtX2lycSh0aGlzLnBpbywgaGFuZGxlcik7CiAgfQp9CgpmdW5jdGlvbiBkb3JtYW50KHBpbnMsIGV2ZW50cykgewogIHJwMl9uYXRpdmUuZG9ybWFudChwaW5zLCBldmVudHMpOwp9CgpmdW5jdGlvbiByYW5kb21CaWdJbnQoKSB7CiAgcmV0dXJuIHJwMl9uYXRpdmUucmFuZG9tQmlnSW50KCk7Cn0KCmV4cG9ydHMuUElPID0gUElPOwpleHBvcnRzLkFTTSA9IEFTTTsKZXhwb3J0cy5TdGF0ZU1hY2hpbmUgPSBTdGF0ZU1hY2hpbmU7CmV4cG9ydHMuZG9ybWFudCA9IGRvcm1hbnQ7CmV4cG9ydHMucmFuZG9tQmlnSW50ID0gcmFuZG9tQmlnSW50OwpleHBvcnRzLlRFTVBFUkFUVVJFX0FEQyA9IFRFTVBFUkFUVVJFX0FEQzsK",
+  test: "Ly8gVW5pdCB0ZXN0cyBmb3IgdGhlIHJwMiBBU00gLyBTdGF0ZU1hY2hpbmUgSmF2YVNjcmlwdCBsYXllciAoaXNzdWVzICM2ODgsICM2ODksICM2OTEpLgovLwovLyBSdW5zIHVuZGVyIHBsYWluIE5vZGUgYnkgc3R1YmJpbmcgdGhlIG5hdGl2ZSBgcnAyYCBiaW5kaW5nLiBPbmx5IHRoZSBwdXJlLUpTCi8vIGVuY29kaW5nL2xpbWl0cyBsb2dpYyBpcyBleGVyY2lzZWQgaGVyZTsgdGhlIGhhcmR3YXJlIChzdGF0ZSBtYWNoaW5lcywgUElPCi8vIG1lbW9yeSkgaXMgZW11bGF0ZWQgY2xvc2VseSBlbm91Z2ggdG8gZGV0ZWN0IHRoZSAjNjkxIG9mZnNldC1kcmlmdCBidWcgY2xhc3MuCi8vCi8vICAgbm9kZSB0ZXN0cy9ycDIuYXNtLnRlc3QuanMKCiJ1c2Ugc3RyaWN0IjsKCi8vIC0tLSBTdHViIHRoZSBuYXRpdmUgYmluZGluZyBiZWZvcmUgcnAyLmpzIGlzIGxvYWRlZCAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCi8vIHJwMi5qcyBkb2VzOiAgY29uc3QgcnAyX25hdGl2ZSA9IHByb2Nlc3MuYmluZGluZyhwcm9jZXNzLmJpbmRpbmcucnAyKTsKLy8gU28gcHJvY2Vzcy5iaW5kaW5nIG11c3QgYmUgYSBmdW5jdGlvbiBBTkQgZXhwb3NlIGEgYC5ycDJgIG5hbWUgcHJvcGVydHkuCgovLyBNaW5pbWFsIGVtdWxhdGlvbiBvZiB0aGUgcGljby1zZGsgUElPIGluc3RydWN0aW9uLW1lbW9yeSBhbGxvY2F0b3I6Ci8vIC0gcGVyLVBJTyBgdXNlZGAgYml0bWFzayAobGlrZSB0aGUgU0RLJ3Mgc3RhdGljIGBfdXNlZF9pbnN0cnVjdGlvbl9zcGFjZWApCi8vIC0gcGlvX2FkZF9wcm9ncmFtIHBhY2tzIHByb2dyYW1zIGF0IHRoZSBmaXJzdCBmcmVlIGNvbnRpZ3VvdXMgc2xvdCAoYml0IDAgdXApCi8vIC0gcGlvX2NsZWFyX2luc3RydWN0aW9uX21lbW9yeSByZXNldHMgdGhlIHVzZWQgbWFzayB0byAwIChiaXQgMCkKZnVuY3Rpb24gbWFrZU5hdGl2ZVN0dWIoKSB7CiAgY29uc3Qgc3RhdGUgPSB7CiAgICBwaW9Vc2VkOiBbMCwgMF0sIC8vIDMyLWJpdCB1c2VkIG1hc2sgcGVyIFBJTyBpbnN0YW5jZQogIH07CiAgY29uc3QgbG9nID0geyBhZGRQcm9ncmFtOiAwLCBjbGVhcjogMCwgc21Jbml0OiAwLCBlbmFibGVkOiBbXSB9OwoKICBmdW5jdGlvbiBmaW5kT2Zmc2V0KHBpbywgbGVuZ3RoKSB7CiAgICAvLyBNaXJyb3IgdGhlIHJlYWwgU0RLOiAid29yayBkb3duIGZyb20gdGhlIHRvcCIgKDMyIC0gbGVuZ3RoIC0+IDApCiAgICBpZiAobGVuZ3RoIDw9IDAgfHwgbGVuZ3RoID4gMzIpIHJldHVybiAtMTsKICAgIGxldCBtYXNrID0gMDsKICAgIGZvciAobGV0IGkgPSAwOyBpIDwgbGVuZ3RoOyBpKyspIG1hc2sgfD0gMSA8PCBpOwogICAgZm9yIChsZXQgb2ZmID0gMzIgLSBsZW5ndGg7IG9mZiA+PSAwOyBvZmYtLSkgewogICAgICBpZiAoKHN0YXRlLnBpb1VzZWRbcGlvXSAmIChtYXNrIDw8IG9mZikpID09PSAwKSByZXR1cm4gb2ZmOwogICAgfQogICAgcmV0dXJuIC0xOwogIH0KCiAgcmV0dXJuIHsKICAgIF9fc3RhdGU6IHN0YXRlLAogICAgX19sb2c6IGxvZywKICAgIHBpb19hZGRfcHJvZ3JhbShwaW8sIGJpbikgewogICAgICBsb2cuYWRkUHJvZ3JhbSsrOwogICAgICBjb25zdCBsZW5ndGggPSBiaW4ubGVuZ3RoOwogICAgICBjb25zdCBvZmYgPSBmaW5kT2Zmc2V0KHBpbywgbGVuZ3RoKTsKICAgICAgaWYgKG9mZiA8IDApIHJldHVybiAtMTsKICAgICAgbGV0IG1hc2sgPSAwOwogICAgICBmb3IgKGxldCBpID0gMDsgaSA8IGxlbmd0aDsgaSsrKSBtYXNrIHw9IDEgPDwgKG9mZiArIGkpOwogICAgICBzdGF0ZS5waW9Vc2VkW3Bpb10gfD0gbWFzazsKICAgICAgcmV0dXJuIG9mZjsKICAgIH0sCiAgICBwaW9fY2xlYXJfaW5zdHJ1Y3Rpb25fbWVtb3J5KHBpbykgewogICAgICBsb2cuY2xlYXIrKzsKICAgICAgc3RhdGUucGlvVXNlZFtwaW9dID0gMDsKICAgIH0sCiAgICBwaW9fc21faW5pdChwaW8sIHNtLCBvcHRpb25zKSB7CiAgICAgIGxvZy5zbUluaXQrKzsKICAgICAgdGhpcy5fX2xhc3RTbU9mZnNldCA9IG9wdGlvbnMub2Zmc2V0OwogICAgfSwKICAgIHBpb19zbV9zZXRfZW5hYmxlZChwaW8sIHNtLCBlbikgewogICAgICBsb2cuZW5hYmxlZC5wdXNoKHsgcGlvLCBzbSwgZW4gfSk7CiAgICB9LAogICAgcGlvX3NtX3Jlc3RhcnQoKSB7fSwKICAgIHBpb19zbV9leGVjKCkge30sCiAgICBwaW9fc21fcHV0KCkge30sCiAgICBwaW9fc21fZ2V0KCkgewogICAgICByZXR1cm4gMDsKICAgIH0sCiAgICBwaW9fc21fc2V0X3BpbnMoKSB7fSwKICAgIHBpb19zbV9yeGZpZm8oKSB7CiAgICAgIHJldHVybiAwOwogICAgfSwKICAgIHBpb19zbV90eGZpZm8oKSB7CiAgICAgIHJldHVybiAwOwogICAgfSwKICAgIHBpb19zbV9jbGVhcl9maWZvcygpIHt9LAogICAgcGlvX3NtX2RyYWluX3R4ZmlmbygpIHt9LAogICAgcGlvX3NtX2lycSgpIHt9LAogICAgZG9ybWFudCgpIHt9LAogICAgcmFuZG9tQmlnSW50KCkgewogICAgICByZXR1cm4gMW47CiAgICB9LAogIH07Cn0KCmNvbnN0IG5hdGl2ZVN0dWIgPSBtYWtlTmF0aXZlU3R1YigpOwpjb25zdCByZWFsQmluZGluZyA9IHByb2Nlc3MuYmluZGluZzsKcHJvY2Vzcy5iaW5kaW5nID0gZnVuY3Rpb24gKG5hbWUpIHsKICBpZiAobmFtZSA9PT0gInJwMiIpIHJldHVybiBuYXRpdmVTdHViOwogIHJldHVybiByZWFsQmluZGluZyhuYW1lKTsKfTsKcHJvY2Vzcy5iaW5kaW5nLnJwMiA9ICJycDIiOwoKY29uc3QgeyBBU00sIFN0YXRlTWFjaGluZSwgUElPIH0gPSByZXF1aXJlKCIuLi9zcmMvbW9kdWxlcy9ycDIvcnAyLmpzIik7CgovLyAtLS0gdGlueSB0ZXN0IHJ1bm5lciAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpsZXQgcGFzc2VkID0gMDsKbGV0IGZhaWxlZCA9IDA7CmZ1bmN0aW9uIG9rKG5hbWUsIGNvbmQsIGV4dHJhKSB7CiAgaWYgKGNvbmQpIHsKICAgIHBhc3NlZCsrOwogICAgY29uc29sZS5sb2coYCAgXHUyNzEzICR7bmFtZX1gKTsKICB9IGVsc2UgewogICAgZmFpbGVkKys7CiAgICBjb25zb2xlLmxvZyhgICBcdTI3MTcgJHtuYW1lfSR7ZXh0cmEgPyAiIOKAlCAiICsgZXh0cmEgOiAiIn1gKTsKICB9Cn0KZnVuY3Rpb24gdGhyb3dzKG5hbWUsIGZuLCBtYXRjaCkgewogIHRyeSB7CiAgICBmbigpOwogICAgZmFpbGVkKys7CiAgICBjb25zb2xlLmxvZyhgICBcdTI3MTcgJHtuYW1lfSAoZGlkIE5PVCB0aHJvdylgKTsKICB9IGNhdGNoIChlKSB7CiAgICBjb25zdCBtc2cgPSBlICYmIGUubWVzc2FnZSA/IGUubWVzc2FnZSA6IFN0cmluZyhlKTsKICAgIGNvbnN0IGdvb2QgPSAhbWF0Y2ggfHwgbXNnLmluY2x1ZGVzKG1hdGNoKTsKICAgIGlmIChnb29kKSB7CiAgICAgIHBhc3NlZCsrOwogICAgICBjb25zb2xlLmxvZyhgICBcdTI3MTMgJHtuYW1lfSAodGhyZXc6ICR7bXNnfSlgKTsKICAgIH0gZWxzZSB7CiAgICAgIGZhaWxlZCsrOwogICAgICBjb25zb2xlLmxvZyhgICBcdTI3MTcgJHtuYW1lfSAodGhyZXcgd3Jvbmc6ICR7bXNnfSwgd2FudGVkIC8ke21hdGNofS8pYCk7CiAgICB9CiAgfQp9CmZ1bmN0aW9uIHNlY3Rpb24odCkgewogIGNvbnNvbGUubG9nKGBcbiR7dH1gKTsKfQoKLy8gLS0tICM2ODk6IHByb2dyYW0gc2l6ZSBsaW1pdCAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0Kc2VjdGlvbigiSXNzdWUgIzY4OSDigJQgcHJvZ3JhbSBzaXplIGxpbWl0Iik7CnsKICBjb25zdCBhc20gPSBuZXcgQVNNKCk7CiAgbGV0IHRocmV3ID0gZmFsc2U7CiAgdHJ5IHsKICAgIC8vIGJ1aWxkIGEgcHJvZ3JhbSBvZiAzMyBpbnN0cnVjdGlvbnMgLT4gbXVzdCBiZSByZWplY3RlZAogICAgZm9yIChsZXQgaSA9IDA7IGkgPCAzMzsgaSsrKSBhc20ubm9wKCk7CiAgfSBjYXRjaCAoZSkgewogICAgdGhyZXcgPSB0cnVlOwogIH0KICBvaygicmVqZWN0cyBhIDMzLWluc3RydWN0aW9uIHByb2dyYW0iLCB0aHJldyk7Cn0KewogIGNvbnN0IGFzbSA9IG5ldyBBU00oKTsKICAvLyBleGFjdGx5IDMyIGluc3RydWN0aW9ucyBpcyBsZWdhbAogIGZvciAobGV0IGkgPSAwOyBpIDwgMzI7IGkrKykgYXNtLm5vcCgpOwogIG9rKCJhY2NlcHRzIGV4YWN0bHkgMzIgaW5zdHJ1Y3Rpb25zIiwgYXNtLmNvZGUubGVuZ3RoID09PSAzMik7CiAgb2soInRvQmluYXJ5KCkgbGVuZ3RoID09PSAzMiIsIGFzbS50b0JpbmFyeSgpLmxlbmd0aCA9PT0gMzIpOwp9CnsKICAvLyB0aGUgZXJyb3IgbWVzc2FnZSBmcm9tIHRoZSBpc3N1ZSBpcyBwcmVzZXJ2ZWQKICBjb25zdCBhc20gPSBuZXcgQVNNKCk7CiAgbGV0IG1zZyA9ICIiOwogIHRyeSB7CiAgICBmb3IgKGxldCBpID0gMDsgaSA8IDQwOyBpKyspIGFzbS5ub3AoKTsKICB9IGNhdGNoIChlKSB7CiAgICBtc2cgPSBlLm1lc3NhZ2U7CiAgfQogIG9rKCJ0aHJvd3MgJ1Byb2dyYW0gdG9vIGxvbmchJyIsIG1zZyA9PT0gIlByb2dyYW0gdG9vIGxvbmchIiwgbXNnKTsKfQp7CiAgLy8gbGltaXQgaXMgZW5mb3JjZWQgZXZlbiB3aGVuIHVzaW5nIHJlYWwgaW5zdHJ1Y3Rpb25zCiAgY29uc3QgYXNtID0gbmV3IEFTTSgpOwogIGxldCB0aHJldyA9IGZhbHNlOwogIHRyeSB7CiAgICBmb3IgKGxldCBpID0gMDsgaSA8IDMzOyBpKyspIGFzbS5zZXQoInBpbnMiLCAwKTsKICB9IGNhdGNoIChlKSB7CiAgICB0aHJldyA9IHRydWU7CiAgfQogIG9rKCJyZWplY3RzIDMzIHNldCgpIGluc3RydWN0aW9ucyIsIHRocmV3KTsKfQoKLy8gLS0tICM2ODg6IGRlbGF5IGJvdW5kcyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0Kc2VjdGlvbigiSXNzdWUgIzY4OCDigJQgZGVsYXkoKSBib3VuZHMgY2hlY2tpbmciKTsKewogIGNvbnN0IGFzbSA9IG5ldyBBU00oKTsKICBhc20uc2V0KCJwaW5zIiwgMSkuZGVsYXkoMCk7CiAgb2soImRlbGF5KDApIGFjY2VwdGVkIiwgKGFzbS5jb2RlWzBdICYgMHgxZjAwKSA9PT0gMCk7Cn0KewogIGNvbnN0IGFzbSA9IG5ldyBBU00oKTsKICBhc20uc2V0KCJwaW5zIiwgMSkuZGVsYXkoMzEpOwogIC8vIDMxIDw8IDggPSAweDFGMDAsIGFsbCB3aXRoaW4gZGVsYXkgZmllbGQKICBvaygiZGVsYXkoMzEpIGFjY2VwdGVkLCBmaXRzIGluIDUtYml0IGZpZWxkIiwgKGFzbS5jb2RlWzBdICYgMHgxZjAwKSA9PT0gMHgxZjAwKTsKfQp7CiAgY29uc3QgYXNtID0gbmV3IEFTTSgpOwogIHRocm93cygKICAgICJkZWxheSgzMikgdGhyb3dzICh3YXMgY29ycnVwdGluZyBpbnN0cnVjdGlvbi9zaWRlc2V0IGJpdHMpIiwKICAgICgpID0+IGFzbS5zZXQoInBpbnMiLCAxKS5kZWxheSgzMiksCiAgICAicmFuZ2UiCiAgKTsKfQp7CiAgY29uc3QgYXNtID0gbmV3IEFTTSgpOwogIHRocm93cygiZGVsYXkoLTEpIHRocm93cyIsICgpID0+IGFzbS5zZXQoInBpbnMiLCAxKS5kZWxheSgtMSksICJyYW5nZSIpOwp9CnsKICBjb25zdCBhc20gPSBuZXcgQVNNKCk7CiAgdGhyb3dzKCJkZWxheSgxMDApIHRocm93cyIsICgpID0+IGFzbS5zZXQoInBpbnMiLCAxKS5kZWxheSgxMDApLCAicmFuZ2UiKTsKfQp7CiAgY29uc3QgYXNtID0gbmV3IEFTTSgpOwogIHRocm93cygiZGVsYXkoJzInKSB0aHJvd3MgKG5vbi1pbnRlZ2VyKSIsICgpID0+IGFzbS5zZXQoInBpbnMiLCAxKS5kZWxheSgiMiIpLCAicmFuZ2UiKTsKfQp7CiAgY29uc3QgYXNtID0gbmV3IEFTTSgpOwogIHRocm93cygiZGVsYXkoTmFOKSB0aHJvd3MiLCAoKSA9PiBhc20uc2V0KCJwaW5zIiwgMSkuZGVsYXkoTmFOKSwgInJhbmdlIik7Cn0KCi8vIC0tLSBlbmNvZGluZyBjb3JyZWN0bmVzcyAocmVncmVzc2lvbiBndWFyZCkgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0Kc2VjdGlvbigiRW5jb2RpbmcgcmVncmVzc2lvbiAoaW5zdHJ1Y3Rpb24gKyBsYWJlbCArIGRlbGF5KSIpOwp7CiAgY29uc3QgYXNtID0gbmV3IEFTTSgpOwogIGFzbS5zZXQoInBpbmRpcnMiLCAxKQogICAgLmxhYmVsKCJhZ2FpbiIpCiAgICAuc2V0KCJwaW5zIiwgMSkKICAgIC5kZWxheSgyKQogICAgLnNldCgicGlucyIsIDApCiAgICAuZGVsYXkoMSkKICAgIC5qbXAoImFnYWluIik7CiAgY29uc3QgYmluID0gYXNtLnRvQmluYXJ5KCk7CiAgb2soIjQgaW5zdHJ1Y3Rpb25zIHByb2R1Y2VkIiwgYmluLmxlbmd0aCA9PT0gNCwgImdvdCAiICsgYmluLmxlbmd0aCk7CiAgLy8gU0VUIHBpbmRpcnMgMSA9PSAweGUwMDAgfCAoNDw8NSkgfCAxID0gMHhlMDgxICAoZGVzdCBwaW5kaXJzID0gNCwgc28gYml0IDcpCiAgb2soIlNFVCBwaW5kaXJzIDEgPT0gMHhlMDgxIiwgYmluWzBdID09PSAweGUwODEsICIweCIgKyBiaW5bMF0udG9TdHJpbmcoMTYpKTsKICAvLyBTRVQgcGlucyAxICsgZGVsYXkoMik6IDB4ZTAwMCB8IDEgfCAoMjw8OCkgPSAweGUyMDEKICBvaygiU0VUIHBpbnMgMSArIGRlbGF5KDIpID09IDB4ZTIwMSIsIGJpblsxXSA9PT0gMHhlMjAxLCAiMHgiICsgYmluWzFdLnRvU3RyaW5nKDE2KSk7CiAgLy8gU0VUIHBpbnMgMCArIGRlbGF5KDEpOiAweGUwMDAgfCAwIHwgKDE8PDgpID0gMHhlMTAwCiAgb2soIlNFVCBwaW5zIDAgKyBkZWxheSgxKSA9PSAweGUxMDAiLCBiaW5bMl0gPT09IDB4ZTEwMCwgIjB4IiArIGJpblsyXS50b1N0cmluZygxNikpOwogIC8vIEpNUCAnYWdhaW4nIHRhcmdldCA9IDEKICBvaygiSk1QIHRhcmdldCByZXNvbHZlZCB0byAxIiwgKGJpblszXSAmIDB4MWYpID09PSAxLCAiMHgiICsgYmluWzNdLnRvU3RyaW5nKDE2KSk7Cn0KCi8vIC0tLSAjNjkxOiBTdGF0ZU1hY2hpbmUgb2Zmc2V0IHN0YWJpbGl0eSBhY3Jvc3MgcHJvZ3JhbSBydW5zIC0tLS0tLS0tLS0tLS0tLS0tCnNlY3Rpb24oIklzc3VlICM2OTEg4oCUIFN0YXRlTWFjaGluZSBvZmZzZXQgc3RhYmxlIGFjcm9zcyBwcm9ncmFtIHJ1bnMiKTsKewogIG5hdGl2ZVN0dWIuX19sb2cuYWRkUHJvZ3JhbSA9IDA7CiAgbmF0aXZlU3R1Yi5fX2xvZy5jbGVhciA9IDA7CiAgbmF0aXZlU3R1Yi5fX2xvZy5zbUluaXQgPSAwOwogIG5hdGl2ZVN0dWIuX19zdGF0ZS5waW9Vc2VkID0gWzAsIDBdOwoKICBmdW5jdGlvbiBuZXdTbSgpIHsKICAgIGNvbnN0IGFzbSA9IG5ldyBBU00oKTsKICAgIGFzbS5zZXQoInBpbmRpcnMiLCAxKQogICAgICAubGFiZWwoImFnYWluIikKICAgICAgLnNldCgicGlucyIsIDEpCiAgICAgIC5kZWxheSgyKQogICAgICAuc2V0KCJwaW5zIiwgMCkKICAgICAgLmRlbGF5KDEpCiAgICAgIC5qbXAoImFnYWluIik7CiAgICBjb25zdCBvcHRpb25zID0geyBmcmVxOiA1MDAwMDAwLCBzZXRCYXNlOiAwIH07CiAgICByZXR1cm4gbmV3IFN0YXRlTWFjaGluZShTdGF0ZU1hY2hpbmUuZ2V0QXZhaWxhYmxlSWQoKSwgYXNtLCBvcHRpb25zKTsKICB9CgogIGNvbnN0IGZpcnN0ID0gbmV3U20oKTsKICBvaygiZmlyc3QgcHJvZ3JhbSBvZmZzZXQgPT09IDI4IChTREsgYWxsb2NhdGVzIHRvcC1kb3duKSIsIGZpcnN0Lm9mZnNldCA9PT0gMjgsICJnb3QgIiArIGZpcnN0Lm9mZnNldCk7CiAgb2soImZpcnN0IHByb2dyYW0gbGVuZ3RoID09PSA0IiwgZmlyc3QubGVuZ3RoID09PSA0LCAiZ290ICIgKyBmaXJzdC5sZW5ndGgpOwoKICAvLyBFbXVsYXRlIHdoYXQgYSBjbGVhbiB0ZWFyZG93biAoa21fc3lzdGVtX2NsZWFudXApIE1VU1QgZG86IGNsZWFyIFBJTyBtZW1vcnkKICAvLyAod2hpY2ggaW4gdGhlIFNESyBhbHNvIHJlc2V0cyB0aGUgc3RhdGljIGBfdXNlZF9pbnN0cnVjdGlvbl9zcGFjZWAgY291bnRlcikuCiAgLy8gVGhlICM2OTEgZml4IGFkZHMga21fcGlvX2NsZWFudXAoKSB0aGF0IGNhbGxzIHBpb19jbGVhcl9pbnN0cnVjdGlvbl9tZW1vcnkKICAvLyBmb3IgYm90aCBQSU9zIG9uIGV2ZXJ5IHByb2dyYW0gZW5kIC8gLmxvYWQgLyAucmVzZXQuCiAgbmF0aXZlU3R1Yi5waW9fY2xlYXJfaW5zdHJ1Y3Rpb25fbWVtb3J5KDApOwogIG5hdGl2ZVN0dWIucGlvX2NsZWFyX2luc3RydWN0aW9uX21lbW9yeSgxKTsKCiAgLy8gQSBmcmVzaCBKUyBoZWFwIHdvdWxkIGFsc28gZHJvcCB0aGUgc3RhdGljIGlkcyBsaXN0OyByZXNldCBpdCB0byBtb2RlbAogIC8vIHByb2Nlc3MgcmVzdGFydCBiZXR3ZWVuIC5sb2FkIHJ1bnMuCiAgU3RhdGVNYWNoaW5lLmlkcyA9IFswLCA0LCAxLCA1LCAyLCA2LCAzLCA3XTsKICBjb25zdCBzZWNvbmQgPSBuZXdTbSgpOwogIG9rKCJzZWNvbmQgcHJvZ3JhbSBvZmZzZXQgPT09IDI4IGFnYWluIChubyBkcmlmdCkiLCBzZWNvbmQub2Zmc2V0ID09PSAyOCwgImdvdCAiICsgc2Vjb25kLm9mZnNldCk7CiAgb2soInNlY29uZCBwcm9ncmFtIGxlbmd0aCA9PT0gNCIsIHNlY29uZC5sZW5ndGggPT09IDQsICJnb3QgIiArIHNlY29uZC5sZW5ndGgpOwp9CnsKICAvLyBSZXByb2R1Y2UgdGhlICM2OTEgYnVnOiBhY3Jvc3MgLmxvYWQgcnVucyB0aGUgU0RLJ3MgQy1zdGF0aWMKICAvLyBgX3VzZWRfaW5zdHJ1Y3Rpb25fc3BhY2VgIChhIHBlci1QSU8gY291bnRlcikgaXMgbmV2ZXIgcmVzZXQsIGFuZCBlYWNoIHJ1bgogIC8vIGlzIGEgZnJlc2ggSlMgaGVhcCB0aGF0IHJlLWFkZHMgdGhlIHNhbWUgcHJvZ3JhbSB0byBwaW8gMC4KICAvLyBUaGUgcmVhbCBTREsgYWxsb2NhdGVzIGRvd253YXJkIGZyb20gdGhlIHRvcCwgc28gdGhlIG9mZnNldCBkcmlmdHMgYnkgdGhlCiAgLy8gcHJvZ3JhbSBsZW5ndGggZWFjaCBydW4gYW5kIGV2ZW50dWFsbHkgZ29lcyBuZWdhdGl2ZSAodGhlIHJlcG9ydGVyJ3MgbG9nKS4KICBuYXRpdmVTdHViLl9fc3RhdGUucGlvVXNlZCA9IFswLCAwXTsKICBjb25zdCBvZmZzZXRzID0gW107CiAgLy8gMy1pbnN0cnVjdGlvbiBwcm9ncmFtIChkZWxheSgpIG1vZGlmaWVzLCBpdCBkb2VzIG5vdCBhZGQgYW4gaW5zdHJ1Y3Rpb24pOwogIC8vIDExIHJ1bnMgcHVzaCB0aGUgb2Zmc2V0IGJlbG93IHplcm8KICBmb3IgKGxldCBydW4gPSAwOyBydW4gPCAxMTsgcnVuKyspIHsKICAgIC8vIGZyZXNoIEpTIGhlYXAgZWFjaCBydW46IHN0YXRpYyBpZHMgbGlzdCBpcyByZXNldAogICAgU3RhdGVNYWNoaW5lLmlkcyA9IFswLCA0LCAxLCA1LCAyLCA2LCAzLCA3XTsKICAgIGNvbnN0IGFzbSA9IG5ldyBBU00oKTsKICAgIGFzbS5zZXQoInBpbmRpcnMiLCAxKS5sYWJlbCgieCIpLnNldCgicGlucyIsIDEpLmRlbGF5KDIpLmptcCgieCIpOyAvLyAzIGlucwogICAgY29uc3QgcyA9IG5ldyBTdGF0ZU1hY2hpbmUoU3RhdGVNYWNoaW5lLmdldEF2YWlsYWJsZUlkKCksIGFzbSwge30pOwogICAgb2Zmc2V0cy5wdXNoKHMub2Zmc2V0KTsKICAgIC8vIE5PVEU6IG5vIGttX3Bpb19jbGVhbnVwKCkgaGVyZSAtPiBtb2RlbHMgdGhlIGJ1Z2d5IHRlYXJkb3duCiAgfQogIG9rKAogICAgIndpdGhvdXQgY2xlYW51cCwgb2Zmc2V0IGRyaWZ0cyBydW4tdG8tcnVuIChoYXJuZXNzIHJlcHJvZHVjZXMgdGhlIGJ1ZykiLAogICAgb2Zmc2V0c1swXSA9PT0gMjkgJiYgb2Zmc2V0c1sxXSA9PT0gMjYgJiYgb2Zmc2V0c1syXSA9PT0gMjMsCiAgICBgb2Zmc2V0cyA9ICR7b2Zmc2V0cy5qb2luKCIsICIpfSAoZXhwZWN0ZWQgMjksIDI2LCAyMywgLi4uKWAKICApOwogIG9rKAogICAgImRyaWZ0IHJlYWNoZXMgbmVnYXRpdmUgKHRoZSBjb3JydXB0aW9uIHRoZSByZXBvcnRlciBoaXQpIiwKICAgIG9mZnNldHNbb2Zmc2V0cy5sZW5ndGggLSAxXSA8IDAsCiAgICBgZmluYWwgPSAke29mZnNldHNbb2Zmc2V0cy5sZW5ndGggLSAxXX1gCiAgKTsKfQoKLy8gLS0tIFN0YXRlTWFjaGluZSBpZCBhbGxvY2F0aW9uIChyZWdyZXNzaW9uKSAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpzZWN0aW9uKCJTdGF0ZU1hY2hpbmUgaWQgYWxsb2NhdGlvbiIpOwp7CiAgU3RhdGVNYWNoaW5lLmlkcyA9IFswLCA0LCAxLCA1LCAyLCA2LCAzLCA3XTsKICBjb25zdCBhc20gPSBuZXcgQVNNKCk7CiAgYXNtLm5vcCgpOwogIGNvbnN0IHMgPSBuZXcgU3RhdGVNYWNoaW5lKDQsIGFzbSwge30pOwogIG9rKCJTTSA0IC0+IHBpbyAxLCBzbSAwIiwgcy5waW8gPT09IDEgJiYgcy5zbSA9PT0gMCwgYHBpbz0ke3MucGlvfSBzbT0ke3Muc219YCk7Cn0KewogIFN0YXRlTWFjaGluZS5pZHMgPSBbMCwgNCwgMSwgNSwgMiwgNiwgMywgN107CiAgY29uc3QgYXNtID0gbmV3IEFTTSgpOwogIGFzbS5ub3AoKTsKICBjb25zdCBzID0gbmV3IFN0YXRlTWFjaGluZSgxLCBhc20sIHt9KTsKICBvaygiU00gMSAtPiBwaW8gMCwgc20gMSIsIHMucGlvID09PSAwICYmIHMuc20gPT09IDEsIGBwaW89JHtzLnBpb30gc209JHtzLnNtfWApOwp9CgovLyAtLS0gc3VtbWFyeSAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpjb25zb2xlLmxvZyhgXG4ke3Bhc3NlZH0gcGFzc2VkLCAke2ZhaWxlZH0gZmFpbGVkYCk7CnByb2Nlc3MuZXhpdChmYWlsZWQgPiAwID8gMSA6IDApOwo=",
+};
+
+</script>
+<script type="module">
+/* Kaluma PIO Workbench — app.js  (v2: animated "it's actually running")
+ *
+ * Runs the REAL repo code (src/modules/rp2/rp2.js + tests/rp2.asm.test.js) in
+ * the browser, and drives a faithful model of the pico-sdk PIO behaviors the
+ * C fixes target. Everything is ANIMATED (step-by-step, cancellable) so the
+ * before/after difference is *watchable*: the offset drifts, the LED blinks,
+ * memory fills/clears, and the SM stops — instead of snapping to an end-state.
+ *
+ * This is a MODEL, not silicon, and the UI says so.
+ */
+"use strict";
+
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SPEED = 430; // ms per .load step (slow enough to watch, fast enough to feel snappy)
+
+/* ============ DEV-ONLY: visible error trap (verify console is clean) ============ */
+(function installErrorTrap() {
+  const panel = document.createElement("div");
+  panel.id = "__errtrap";
+  panel.style.cssText =
+    "position:fixed;top:8px;right:8px;z-index:9999;max-width:380px;max-height:45vh;overflow:auto;" +
+    "background:#0b1220;color:#9fe6ff;border:1px solid #2dd4bf;border-left:5px solid #2dd4bf;" +
+    "border-radius:8px;padding:8px 10px;font:11px/1.5 ui-monospace,Menlo,monospace;box-shadow:0 6px 24px rgba(0,0,0,.5);";
+  function line(txt, bad) {
+    const d = document.createElement("div");
+    d.textContent = txt;
+    d.style.color = bad ? "#ff9aa2" : "#9fe6ff";
+    d.style.borderBottom = "1px dashed rgba(255,255,255,.08)";
+    d.style.padding = "2px 0";
+    panel.appendChild(d);
+    panel.style.display = "block";
+    panel.scrollTop = panel.scrollHeight;
+  }
+  panel.appendChild(Object.assign(document.createElement("div"),
+    { textContent: "⚠ runtime error trap (dev) — empty = clean", style: { color: "#5eead4", fontWeight: "700", marginBottom: "4px" } }));
+  const errs = [];
+  window.addEventListener("error", (e) => {
+    errs.push("error: " + (e.message || e.type) + (e.filename ? " @ " + e.filename + ":" + e.lineno : ""));
+    line(errs[errs.length - 1], true);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const m = e.reason && (e.reason.message || String(e.reason));
+    errs.push("rejection: " + m);
+    line(errs[errs.length - 1], true);
+  });
+  self.__ERRTRAP__ = { errs, panel };
+  return panel;
+})();
+/* ============ end dev error trap ============ */
+
+/* ============ 1. load real repo source (with fallback bundle) ============ */
+const REL = "../";
+async function loadText(p) {
+  const r = await fetch(REL + p, { cache: "no-store" });
+  if (!r.ok) throw new Error("failed to load " + p + " (" + r.status + ")");
+  return r.text();
+}
+let rp2Src = null, testSrc = null;
+try {
+  [rp2Src, testSrc] = await Promise.all([
+    loadText("src/modules/rp2/rp2.js"),
+    loadText("tests/rp2.asm.test.js"),
+  ]);
+} catch (e) {
+  const B = self.__KALUMA_DEMO_BUNDLE__;
+  if (B) { rp2Src = atob(B.rp2); testSrc = atob(B.test); }
+  else {
+    document.body.insertAdjacentHTML("beforeend",
+      `<div style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#3b0d18;color:#ffd9de;border:1px solid #fb7185;padding:10px 16px;border-radius:12px;font-family:var(--mono);font-size:13px;z-index:99">
+        Could not load repo source: ${e.message}. Static explanation still renders.</div>`);
+    rp2Src = null; testSrc = null;
+  }
+}
+
+/* ============ 2. run the real test file in a Node-like sandbox ============ */
+function runRealTests({ rp2Src, testSrc }) {
+  const lines = []; let exitCode = 0;
+  const proc = {
+    binding: () => { throw new Error("process.binding()"); },
+    exit: (c) => { exitCode = c; },
+    platform: "browser", argv: ["node", "tests/rp2.asm.test.js"],
+  };
+  const cache = {};
+  function require(path) {
+    if (String(path).includes("rp2/rp2.js")) {
+      if (!cache.rp2) {
+        const exp = {}; const mod = { exports: exp };
+        new Function("require", "exports", "module", "process", rp2Src)(require, exp, mod, proc);
+        cache.rp2 = mod;
+      }
+      return cache.rp2.exports;
+    }
+    throw new Error("no module resolver for: " + path);
+  }
+  const clog = { log: (...a) => lines.push(a.map(String).join(" ")) };
+  const mod = { exports: {} };
+  new Function("require", "exports", "module", "process", "console", testSrc)(require, mod.exports, mod, proc, clog);
+  return { lines, exitCode, rp2: cache.rp2 ? cache.rp2.exports : null };
+}
+
+/* ============ 3. faithful PIO model ============ */
+function makePioModel() {
+  const used = [0, 0];
+  const enabled = new Array(8).fill(false);
+  const claimed = new Array(8).fill(false);
+  function addProgram(pio, length) {
+    if (length <= 0 || length > 32) return -1;
+    for (let off = 32 - length; off >= 0; off--) {
+      let mask = 0; for (let i = 0; i < length; i++) mask |= 1 << (off + i);
+      if ((used[pio] & mask) === 0) { used[pio] |= mask; return off; }
+    }
+    return -1;
+  }
+  function clear(pio) { used[pio] = 0; }
+  return {
+    used, enabled, claimed,
+    addProgram, clear,
+    enable: (pio, sm, en) => { enabled[pio * 4 + sm] = en; },
+    unclaim: (pio, sm) => { claimed[pio * 4 + sm] = false; },
+    reset() { used[0] = 0; used[1] = 0; enabled.fill(false); claimed.fill(false); },
+  };
+}
+/* The km_pio_cleanup() the fix adds (see targets/rp2/src/system.c). */
+function km_pio_cleanup(m) {
+  for (let pio = 0; pio < 2; pio++) {
+    for (let sm = 0; sm < 4; sm++) { m.enable(pio, sm, false); m.unclaim(pio, sm); }
+    m.clear(pio);
+  }
+}
+
+/* ============ 4. shared animation runtime ============ */
+let MODE = "after";
+let token = { dead: false };
+// Stop any in-flight run, then hand the new run a FRESH LIVE token.
+// (Bug: this previously returned a dead token, so every button-triggered run
+//  bailed on its first `if (isDead(t)) return;` and rendered nothing — the
+//  "buttons don't visibly run anything" symptom.)
+function cancelCurrent() {
+  token.dead = true;        // mark the currently-running loop as dead (it references this object)
+  token = { dead: false };  // the new run gets a fresh, LIVE token
+  return token;
+}
+const isDead = (t) => t.dead;
+
+function buildLedProgram(ASM) {
+  const asm = new ASM();
+  asm.set("pindirs", 1).label("again").set("pins", 1).delay(2)
+    .set("pins", 0).delay(1).jmp("again");
+  return asm;
+}
+
+/* ---- pin LED (showcase) ---- */
+function setLed(state) { // 'idle' | 'blink' | 'lit'
+  const led = $("#pinLed");
+  led.classList.remove("lit", "blink");
+  const txt = $("#pinLedText");
+  if (state === "blink") { led.classList.add("blink"); txt.textContent = "pin 0 · SM0 RUNNING (blinking)"; }
+  else if (state === "lit") { led.classList.add("lit"); txt.textContent = "pin 0 · HIGH"; }
+  else txt.textContent = "pin 0 · idle";
+}
+function setSmLed(el, on, blink) {
+  el.classList.remove("on", "blink");
+  if (blink) el.classList.add("blink"); else if (on) el.classList.add("on");
+}
+
+/* ---- PIO memory / SM / trace rendering ---- */
+function renderMemory(m, currentOffset) {
+  const cells = $("#memCells"); cells.innerHTML = "";
+  let usedCount = 0;
+  for (let off = 31; off >= 0; off--) {
+    const el = document.createElement("div"); el.className = "cell";
+    const isUsed = (m.used[0] >> off) & 1;
+    const isCur = currentOffset >= 0 && off >= currentOffset && off < currentOffset + 4;
+    if (isCur) el.classList.add("cur");
+    else if (isUsed) el.classList.add("used");
+    if (isUsed) usedCount++;
+    el.innerHTML = `<span>ins</span><span class="off">${off}</span>`;
+    cells.appendChild(el);
+  }
+  $("#memUsed").textContent = `used: ${usedCount}/32`;
+}
+function renderSMs(m) {
+  const row = $("#smRow"); row.innerHTML = "";
+  const labels = ["SM0", "SM1", "SM2", "SM3"];
+  for (let i = 0; i < 4; i++) {
+    const on = m.enabled[i];
+    const el = document.createElement("div");
+    el.className = "sm " + (on ? "running" : "stopped");
+    el.innerHTML = `<div class="id">pio0 · ${labels[i]}</div>
+      <div class="state"><span class="d"></span>${on ? "running" : "stopped"}</div>`;
+    row.appendChild(el);
+  }
+}
+function renderTrace(offsets, upto) {
+  const t = $("#offsetTrace"); t.innerHTML = "";
+  const shown = offsets.slice(0, upto + 1);
+  shown.forEach((o, i) => {
+    const neg = o < 0;
+    const el = document.createElement("div");
+    el.className = "t " + (neg ? "neg" : (MODE === "after" ? "stable" : ""));
+    el.textContent = "run" + i + "→" + (neg ? "FAIL" : o);
+    el.title = neg ? "out of PIO instruction memory" : "program offset";
+    t.appendChild(el);
+    if (i < shown.length - 1) t.appendChild(Object.assign(document.createElement("span"), { className: "arr", textContent: "›" }));
+  });
+}
+function setStatus(html) { $("#pioStatus").innerHTML = html; }
+
+/* ============ 5. SHOWCASE animation (#690/#691) ============
+ * len = 4 instructions, so 8 programs fill the 32-slot PIO memory exactly
+ * (offsets 28 → 0). RUNS = 9 so the 9th program is the FIRST to not fit
+ * (offset −1) — that is the #691 "allocator runs out" the bug report hit.
+ * After-mode cleans up every run, so all 9 land at the same top slot (28).
+ * (With 8 runs nothing ever failed, yet the verdict claimed "runs out".) */
+const RUNS = 9;
+function doShowcase(t) {
+  const m = makePioModel();
+  const offsets = [];
+  const len = 4;
+  (async () => {
+    for (let i = 0; i < RUNS; i++) {
+      if (isDead(t)) return;
+      const off = m.addProgram(0, len);
+      offsets.push(off);
+      if (off >= 0) m.enable(0, 0, true); // SM0 started (only if the program fit)
+      renderMemory(m, off); renderSMs(m); renderTrace(offsets, i);
+      if (off >= 0) { setLed("blink"); setStatus(`<span style="color:var(--amber)">run ${i}</span> · program @ offset ${off} · SM0 running…`); }
+      else { setLed("blink"); setStatus(`<span style="color:var(--red)">run ${i} · FAIL — no room in PIO instruction memory (offset ${off})</span>`); }
+      await sleep(SPEED * 0.9); if (isDead(t)) return;
+
+      // program end / teardown
+      if (MODE === "after") {
+        km_pio_cleanup(m);
+        renderMemory(m, -1); renderSMs(m);
+        setLed("idle");
+        setStatus(`<span style="color:var(--green)">run ${i} end</span> · km_pio_cleanup() → SM0 stopped, memory cleared`);
+      } else if (off >= 0) {
+        // before mode, program fit: no teardown — SM0 left enabled on stale memory
+        renderSMs(m);
+        setLed("blink");
+        setStatus(`<span style="color:var(--red)">run ${i} end</span> · no teardown — SM0 <b>still running</b> on stale memory`);
+      }
+      // else: before mode, program did NOT fit — leave the FAIL status + SMs running as-is
+      await sleep(SPEED); if (isDead(t)) return;
+    }
+    // final verdict
+    if (MODE === "after") {
+      renderMemory(m, -1); renderSMs(m); setLed("idle");
+      setStatus(`<b style="color:var(--green)">✓ stable.</b> Every run re-allocates at the same top slot (km_pio_cleanup clears memory + stops SMs between runs).`);
+    } else {
+      renderMemory(m, -1);
+      setLed("blink");
+      setStatus(`<b style="color:var(--red)">✗ fault.</b> Memory never cleared → allocator runs out (top-down) and SMs keep running on stale instructions. Only flash_nuke recovers the part.`);
+    }
+  })();
+}
+
+/* ============ 6. the other fixes (animated) ============ */
+function set688bits(spill) {
+  const wrap = $("#d688bits"); wrap.innerHTML = "";
+  // 16 bits, left = bit15 .. right = bit0. delay = bits 12..8 (5). opcode 15..12 (SET=1110).
+  for (let b = 15; b >= 0; b--) {
+    const cell = document.createElement("div"); cell.className = "bit";
+    let cls = "";
+    if (b >= 12 && b <= 15) cls = "op";
+    else if (b >= 8 && b <= 12) cls = "delay";
+    if (cls) cell.classList.add(cls); // guard: classList.add('') throws a SyntaxError in real browsers
+    cell.textContent = b;
+    // SET pins 1 = opcode 1110 (bits 15-12), dest bits 7-5 = 000, set count bit0=1
+    if (b === 15 || b === 14) cell.classList.add("set");      // opcode 1,1
+    if (b === 12) cell.classList.add("set");                  // opcode 0
+    if (b === 0) cell.classList.add("set");                   // set value bit
+    if (spill && b >= 13) cell.classList.add("spill");        // 200 = 11001000 spills into 15..13
+    wrap.appendChild(cell);
+  }
+}
+
+function run688(t) {
+  const bEl = $("#d688before"), aEl = $("#d688after");
+  const bNote = $("#d688beforeNote"), aNote = $("#d688afterNote");
+  bEl.textContent = "…"; aEl.textContent = "…";
+  (async () => {
+    // BEFORE: old delay() did c |= val<<8 with no check → bits spill
+    set688bits(true);
+    await sleep(SPEED * 0.8); if (isDead(t)) return;
+    bEl.textContent = "0x" + (0xe001 | (200 << 8)).toString(16);
+    bEl.classList.add("err"); bEl.classList.remove("ok");
+    bEl.classList.remove("pulse"); void bEl.offsetWidth; bEl.classList.add("pulse");
+    bNote.textContent = `delay=200 (0b11001000) needs 8 bits — 3 spill past the 5-bit field into the opcode/sideset bits (red). Loads silently → garbage.`;
+    await sleep(SPEED * 0.6); if (isDead(t)) return;
+    // AFTER: real code throws before touching the bits
+    aEl.textContent = "…";
+    await sleep(SPEED * 0.5); if (isDead(t)) return;
+    if (RP2) {
+      try { new RP2.ASM().set("pins", 1).delay(200); aEl.textContent = "accepted?"; }
+      catch (e) { aEl.textContent = "RangeError: " + e.message; aEl.classList.add("ok"); }
+    } else { aEl.textContent = "RangeError: delay out of range"; aEl.classList.add("ok"); }
+    aNote.textContent = "Rejected up front — the field can't be corrupted. Clean, predictable failure.";
+  })();
+}
+
+function run689(t) {
+  const bar = $("#d689bar");
+  const bEl = $("#d689before"), aEl = $("#d689after");
+  const bNote = $("#d689beforeNote"), aNote = $("#d689afterNote");
+  bar.style.width = "0%"; bar.classList.remove("over");
+  (async () => {
+    // BEFORE: no cap — fills all the way past 32
+    for (let i = 1; i <= 33; i++) {
+      if (isDead(t)) return;
+      bar.style.width = Math.min(100, (i / 33) * 100) + "%";
+      if (i > 32) bar.classList.add("over");
+      await sleep(SPEED * 0.35);
+    }
+    bEl.textContent = "33 instructions accepted (no cap)"; bEl.classList.add("err");
+    bNote.textContent = "Overflow the 5-bit offset (max 32) — fails unpredictably on the device.";
+    await sleep(SPEED * 0.6); if (isDead(t)) return;
+    // AFTER: real code stops at 33
+    aEl.textContent = "…";
+    await sleep(SPEED * 0.5); if (isDead(t)) return;
+    if (RP2) {
+      try { const a = new RP2.ASM(); for (let i = 0; i < 33; i++) a.nop(); aEl.textContent = "accepted?"; }
+      catch (e) { aEl.textContent = "Error: " + e.message; aEl.classList.add("ok"); }
+    } else { aEl.textContent = "Error: Program too long!"; aEl.classList.add("ok"); }
+    aNote.textContent = "32 is legal; the 33rd throws immediately, in the source — not on the board.";
+  })();
+}
+
+function run686(t) {
+  const core = [".load", ".flash", ".reset", ".help", ".echo", ".sleep"];
+  const fs = [".ls", ".pwd", ".cd", ".mkdir", ".rm", ".cat"];
+  const beforeEl = $("#d686before"), afterEl = $("#d686after");
+  beforeEl.innerHTML = ""; afterEl.innerHTML = "";
+  const beforeCount = $("#d686beforeCount"), afterCount = $("#d686afterCount");
+  beforeCount.textContent = "…"; afterCount.textContent = "…";
+  const pushLine = (el, name, dup) => {
+    const d = document.createElement("div");
+    d.innerHTML = `<span class="cmd ${dup ? "dup" : ""}">${name}</span>${dup ? "  <span style='color:var(--red)'>×dup</span>" : ""}`;
+    el.appendChild(d); el.scrollTop = el.scrollHeight;
+  };
+  (async () => {
+    for (let boot = 1; boot <= 4; boot++) {
+      if (isDead(t)) return;
+      const all = [...core, ...fs];
+      for (const name of all) {
+        if (isDead(t)) return;
+        const dup = fs.includes(name) && boot > 1;
+        pushLine(beforeEl, name, dup);
+        if (!afterEl.querySelector(`.cmd[data-n="${name}"]`)) {
+          const d = document.createElement("div");
+          d.innerHTML = `<span class="cmd" data-n="${name}">${name}</span>`;
+          afterEl.appendChild(d); afterEl.scrollTop = afterEl.scrollHeight;
+        }
+        await sleep(18);
+      }
+      await sleep(SPEED * 0.5);
+      beforeCount.textContent = beforeEl.children.length;
+      afterCount.textContent = afterEl.children.length;
+    }
+    if (isDead(t)) return;
+    beforeCount.textContent = beforeEl.children.length;
+    afterCount.textContent = afterEl.children.length;
+    $("#d686note").textContent = `Before: ${beforeEl.children.length} .help lines (the 6 fs commands re-registered on every boot). After: ${afterEl.children.length} lines (registered once, then updated in place).`;
+  })();
+}
+
+function run690(t) {
+  const bLed = $("#d690ledBefore"), aLed = $("#d690ledAfter");
+  const bEl = $("#d690before"), aEl = $("#d690after");
+  (async () => {
+    // BEFORE: SM0 keeps running after program end → LED stays blinking
+    setSmLed(bLed, true, true);
+    bEl.textContent = "…"; await sleep(SPEED * 0.7); if (isDead(t)) return;
+    bEl.textContent = "SM0 enabled=1, executing stale program @ old offset"; bEl.classList.add("err");
+    $("#d690beforeNote").textContent = "Left enabled after the program ended — it keeps re-executing leftover instructions.";
+    await sleep(SPEED * 0.8); if (isDead(t)) return;
+    // AFTER: cleanup stops it → LED goes out
+    aEl.textContent = "…"; await sleep(SPEED * 0.5); if (isDead(t)) return;
+    setSmLed(aLed, false, false);
+    aEl.textContent = "SM0 enabled=0, unclaimed, memory cleared"; aEl.classList.add("ok");
+    $("#d690afterNote").textContent = "km_pio_cleanup() stops, unclaims and clears every SM + PIO memory on program end.";
+  })();
+}
+
+/* ============ 7. test terminal (stream in) ============ */
+async function streamTests(t) {
+  const out = $("#termOut"); out.innerHTML = "";
+  const btn = $("#btnRunTests");
+  btn.classList.add("loading");
+  const res = runRealTests({ rp2Src, testSrc });
+  RP2 = res.rp2;
+  for (const ln of res.lines) {
+    if (isDead(t)) { btn.classList.remove("loading"); return; }
+    const div = document.createElement("div");
+    if (ln.trim().startsWith("\u2713")) div.className = "pass";
+    else if (ln.trim().startsWith("\u2717")) div.className = "fail";
+    else if (/^(Issue|Encoding|StateMachine|PIO)/.test(ln.trim())) div.className = "sec";
+    else if (/\d+ passed/.test(ln)) div.className = "sum";
+    div.textContent = ln.length ? ln : "\u00a0";
+    out.appendChild(div); out.scrollTop = out.scrollHeight;
+    await sleep(14);
+  }
+  const passed = (res.lines.join("\n").match(/\u2713/g) || []).length;
+  const failedN = (res.lines.join("\n").match(/\u2717/g) || []).length;
+  $("#termStat").innerHTML = failedN
+    ? `${passed} passed, <b style="color:var(--red)">${failedN} failed</b>`
+    : `<b>${passed} passed</b>, 0 failed · exit 0`;
+  btn.classList.remove("loading");
+}
+
+/* ============ 8. orchestration ============ */
+let RP2 = null;
+function runAll(t) {
+  const title = $("#pioCardTitle"), desc = $("#pioCardDesc");
+  if (MODE === "after") {
+    title.textContent = "After the fix — stable program offset across runs";
+    desc.textContent = "km_pio_cleanup() stops SMs + clears PIO memory on every program end, so the allocator always starts clean.";
+  } else {
+    title.textContent = "Before the fix — PIO memory never reset (the bug)";
+    desc.textContent = "No cleanup between runs: the allocator runs out of memory and SMs keep running on stale instructions.";
+  }
+  $("#btnBefore").setAttribute("aria-pressed", MODE === "before");
+  $("#btnAfter").setAttribute("aria-pressed", MODE === "after");
+  doShowcase(t);
+  if (rp2Src) { run688(t); run689(t); }
+  run686(t); run690(t);
+}
+
+function init() {
+  // Load the REAL rp2.js now (not just when "Run tests" is clicked) so the
+  // #688/#689 "Fixed" sides show the code's ACTUAL error text from first paint
+  // (e.g. `delay value must be an integer in the range 0-31 (got 200)`), and
+  // the test terminal is already populated on load.
+  (async () => {
+    if (rp2Src) {
+      const r = runRealTests({ rp2Src, testSrc });
+      RP2 = r.rp2;
+      await streamTests(token);
+    }
+    set688bits(false);
+    runAll(token);
+  })();
+  $("#btnBefore").addEventListener("click", () => { const t = cancelCurrent(); MODE = "before"; runAll(t); });
+  $("#btnAfter").addEventListener("click", () => { const t = cancelCurrent(); MODE = "after"; runAll(t); });
+  $("#btnRun").addEventListener("click", () => { const t = cancelCurrent(); doShowcase(t); });
+  $("#btnStop").addEventListener("click", () => { cancelCurrent(); setLed("idle"); setStatus("stopped."); });
+  $("#btnStep").addEventListener("click", () => {
+    cancelCurrent();
+    // single step in current mode
+    const m = makePioModel(); const off = m.addProgram(0, 4);
+    if (off >= 0) { m.enable(0, 0, true); setLed("blink"); }
+    renderMemory(m, off); renderSMs(m);
+    setStatus(off >= 0 ? `step · program @ offset ${off}, SM0 ${MODE === "after" ? "(will be cleaned up)" : "(not cleaned up)"}` : `step · FAIL — out of PIO instruction memory`);
+  });
+  $("#btn688").addEventListener("click", () => { if (rp2Src) run688(cancelCurrent()); });
+  $("#btn689").addEventListener("click", () => { if (rp2Src) run689(cancelCurrent()); });
+  $("#btn686").addEventListener("click", () => run686(cancelCurrent()));
+  $("#btn690").addEventListener("click", () => run690(cancelCurrent()));
+  $("#btnRunTests").addEventListener("click", () => streamTests(cancelCurrent()));
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();
+
+</script>
+</body>
+</html>
