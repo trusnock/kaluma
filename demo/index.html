@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kaluma PIO Workbench — 5 fixes, live</title>
+<link rel="stylesheet" href="./style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+<div class="topbar">
+  <div class="inner">
+    <div class="brand">
+      <div class="logo">◳</div>
+      <span>Kaluma&nbsp;<small>PIO Workbench</small></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="pill"><span class="dot"></span> running in-browser · real repo code</div>
+    <div class="seg" role="group" aria-label="Before/after">
+      <button class="before" id="btnBefore" aria-pressed="false">Bug (before)</button>
+      <button class="after" id="btnAfter" aria-pressed="true">Fixed (after)</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <span class="eyebrow fade d1">Personal fork · trusnock/kaluma · AI-assisted fixes</span>
+    <h1 class="fade d2">The 5 PIO bugs, fixed — and you can watch it happen.</h1>
+    <p class="lead fade d3">
+      kaluma-project/kaluma is a tiny JavaScript runtime for the Raspberry Pi&nbsp;Pico,
+      and a set of reported bugs in its <b>PIO</b> (Programmable&nbsp;I/O) support were
+      making it unusable. This page runs the <b>real fixed <code>rp2.js</code></b> from the repo
+      in your browser, drives it with a <b>faithful model of the pico-sdk PIO behavior</b>,
+      and shows each fix working <b>before → after</b> live. Flip the switch top-right.
+    </p>
+    <div class="meta fade d4">
+      <span class="chip">📄 real code from <b>src/modules/rp2/rp2.js</b></span>
+      <span class="chip">🧪 real tests from <b>tests/rp2.asm.test.js</b></span>
+      <span class="chip">🛠 fixes for <b>#686 #688 #689 #690 #691</b></span>
+    </div>
+    <div class="legend fade d5">
+      <span><i class="swatch" style="background:#a78bfa"></i> PIO instruction memory (32 slots)</span>
+      <span><i class="swatch" style="background:#2dd4bf"></i> program allocated here</span>
+      <span><i class="swatch" style="background:#fb7185"></i> fault / corruption</span>
+      <span class="hint">Model, not silicon — the exact behaviors these fixes target.</span>
+    </div>
+  </div>
+
+  <!-- SHOWCASE: #690/#691 PIO memory -->
+  <div class="section">
+    <h2>The headline fix — PIO instruction memory &amp; state machines</h2>
+    <p class="sub">Issues <b>#690</b> (SMs keep running after the program ends) and <b>#691</b>
+      (program not cleared between runs → the program offset drifts down to <i>negative</i>, and the
+      part is unrecoverable without <code>flash_nuke</code>). The root cause is a C static in
+      pico-sdk (<code>_used_instruction_space</code>) that only <code>pio_clear_instruction_memory()</code>
+      resets — kaluma never called it after boot. The fix adds <code>km_pio_cleanup()</code> that runs
+      on every program end.</p>
+
+    <div class="card">
+      <div class="head">
+        <span class="badge">#690/#691</span>
+        <div>
+          <h3 id="pioCardTitle">After the fix — stable program offset across runs</h3>
+          <div class="desc" id="pioCardDesc">Each run clears PIO memory + stops SMs, so the allocator always starts clean.</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="hero-grid">
+          <div class="mem">
+            <div class="mtitle"><span>pio 0 · instruction memory</span><span id="memUsed">used: 0/32</span></div>
+            <div class="cells" id="memCells"></div>
+          </div>
+          <div>
+            <div class="trace" id="offsetTrace"></div>
+            <div style="margin:16px 0 6px; color:var(--muted); font-size:13px;">State machines after program end:</div>
+            <div class="smrow" id="smRow"></div>
+            <div class="status-line" id="pioStatus"></div>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
+          <button class="btn primary" id="btnSim">▶ Simulate 10 × .load runs</button>
+          <button class="btn" id="btnResetPio">Reset</button>
+          <span class="hint">A 4-instruction PIO program is loaded on each run (as kaluma does).</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sep" />
+
+  <!-- THE OTHER FIXES -->
+  <div class="section">
+    <h2>The other four fixes</h2>
+    <p class="sub">Each one runs the real repo code (where it's JS) against the same model. Toggle Bug/Fixed above.</p>
+
+    <div class="grid2">
+
+      <!-- #688 -->
+      <div class="card">
+        <div class="head"><span class="badge">#688</span><div><h3>delay() bounds checking</h3><div class="desc">An out-of-range delay silently corrupted the instruction/sideset bits.</div></div></div>
+        <div class="body">
+          <div class="code">asm.set("pins", 1).delay(<span class="n">200</span>)</div>
+          <div class="ba">
+            <div class="col before">
+              <span class="tag">Before</span>
+              <div class="res err" id="d688before"></div>
+              <div class="note" id="d688beforeNote"></div>
+            </div>
+            <div class="col after">
+              <span class="tag">Fixed</span>
+              <div class="res" id="d688after"></div>
+              <div class="note" id="d688afterNote"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- #689 -->
+      <div class="card">
+        <div class="head"><span class="badge">#689</span><div><h3>program size limit</h3><div class="desc">No cap → over-long programs failed to load unpredictably.</div></div></div>
+        <div class="body">
+          <div class="code">for (let i = 0; i &lt; <span class="n">33</span>; i++) asm.nop()</div>
+          <div class="ba">
+            <div class="col before">
+              <span class="tag">Before</span>
+              <div class="res err" id="d689before"></div>
+              <div class="note" id="d689beforeNote"></div>
+            </div>
+            <div class="col after">
+              <span class="tag">Fixed</span>
+              <div class="res" id="d689after"></div>
+              <div class="note" id="d689afterNote"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- #686 -->
+      <div class="card">
+        <div class="head"><span class="badge">#686</span><div><h3>.help command duplication</h3><div class="desc">The 6 fs commands re-registered on every .load/.flash piled up in .help.</div></div></div>
+        <div class="body">
+          <div class="hint">Simulating the command registry across 3 <code>.load</code> cycles:</div>
+          <div class="ba" style="margin-top:10px">
+            <div class="col before">
+              <span class="tag">Before · <span class="count bad" id="d686beforeCount">…</span> lines</span>
+              <div class="helplist" id="d686before"></div>
+            </div>
+            <div class="col after">
+              <span class="tag">Fixed · <span class="count good" id="d686afterCount">…</span> lines</span>
+              <div class="helplist" id="d686after"></div>
+            </div>
+          </div>
+          <div class="note" id="d686note"></div>
+        </div>
+      </div>
+
+      <!-- #690 SM -->
+      <div class="card">
+        <div class="head"><span class="badge">#690</span><div><h3>state machines keep running</h3><div class="desc">SMs left enabled after the program ended, re-running stale instructions.</div></div></div>
+        <div class="body">
+          <div class="ba">
+            <div class="col before">
+              <span class="tag">Before · after program end</span>
+              <div class="res err" id="d690before"></div>
+              <div class="note" id="d690beforeNote"></div>
+            </div>
+            <div class="col after">
+              <span class="tag">Fixed · after program end</span>
+              <div class="res ok" id="d690after"></div>
+              <div class="note" id="d690afterNote"></div>
+            </div>
+          </div>
+          <div class="code" style="margin-top:12px">
+// targets/rp2/src/system.c
+void km_pio_cleanup() {
+  for (int pio=0; pio&lt;2; pio++) {
+    for (int sm=0; sm&lt;4; sm++) {
+      pio_sm_set_enabled(pio, sm, false);
+      pio_sm_unclaim(pio, sm);
+    }
+    pio_clear_instruction_memory(pio);
+  }
+}</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="sep" />
+
+  <!-- TEST TERMINAL -->
+  <div class="section">
+    <h2>The real test suite, run in your browser</h2>
+    <p class="sub">This loads the actual <code>tests/rp2.asm.test.js</code> (25 assertions) and runs it against the
+      real <code>rp2.js</code>, with the same native-binding stub the project ships. The output below is live.</p>
+    <div class="term">
+      <div class="bar">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <span class="fname">tests/rp2.asm.test.js — node tests/rp2.asm.test.js</span>
+      </div>
+      <div class="out" id="termOut">Loading real test file…</div>
+      <div class="foot">
+        <span class="stat" id="termStat">—</span>
+        <span style="flex:1"></span>
+        <button class="btn primary" id="btnRunTests">↻ Run tests</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <p>Personal, non-authoritative fork of <a href="https://github.com/kaluma-project/kaluma">kaluma-project/kaluma</a> (Apache-2.0).
+       Original code by Changjae (Jay) Kim &amp; the Kaluma contributors — no credit taken here.
+       Fixes are AI-assisted (OpenHands) at the owner's direction.</p>
+    <p style="margin-top:6px">
+      <a href="https://github.com/trusnock/kaluma">trusnock/kaluma</a> ·
+      <a href="https://github.com/trusnock/kaluma/blob/master/CONTRIBUTING.md">CONTRIBUTING</a> ·
+      <a href="https://github.com/trusnock/kaluma/blob/master/docs/ai-assisted-fixes.md">how it was done</a> ·
+      <span class="hint">C fixes are build-verified, not hardware-tested (no Pico available).</span>
+    </p>
+  </div>
+
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
